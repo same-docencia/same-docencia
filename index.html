@@ -1377,24 +1377,34 @@ var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 
 async function supa(tabla, metodo, body, filtro){
   var url=SUPA_URL+'/rest/v1/'+tabla+(filtro?'?'+filtro:'');
+  var prefer='return=minimal';
+  if(metodo==='POST')prefer='return=representation';
   var opts={
     method:metodo||'GET',
     headers:{
       'apikey':SUPA_KEY,
       'Authorization':'Bearer '+SUPA_KEY,
       'Content-Type':'application/json',
-      'Prefer': metodo==='POST'?'return=representation':'return=representation'
+      'Prefer':prefer
     }
   };
   if(body)opts.body=JSON.stringify(body);
-  var r=await fetch(url,opts);
-  if(!r.ok){
-    var err=await r.text();
-    console.error('Supabase error',r.status,err);
+  try{
+    var r=await fetch(url,opts);
+    if(!r.ok){
+      var err=await r.text();
+      console.error('Supabase error',metodo,tabla,r.status,err);
+      setSyncStatus('error');
+      return null;
+    }
+    var txt=await r.text();
+    setSyncStatus('ok');
+    return txt?JSON.parse(txt):[];
+  }catch(e){
+    console.error('Supabase fetch error:',e);
+    setSyncStatus('error');
     return null;
   }
-  var txt=await r.text();
-  return txt?JSON.parse(txt):null;
 }
 
 // Helpers
@@ -1408,49 +1418,11 @@ var CARGANDO=false;
 
 // ===== DB (cache local mientras trabaja) =====
 var DB={
-  cursos:[
-    {id:1,nombre:"Capacitación inicial para médicos del SAME",dest:"Médicos/as ingresantes",carga:"100 hs.",ambito:"SAME / IDHS",tipoCurso:"Capacitación",tipo:"Anual",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
-    {id:2,nombre:"Simulación de soporte vital prehospitalario",dest:"Médicos/as",carga:"100 hs.",ambito:"IDHS / SAME / UBA",tipoCurso:"Simulación",tipo:"Por agenda",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
-    {id:3,nombre:"Manejo del paciente en el ámbito prehospitalario",dest:"Médicos/as",carga:"500 hs.",ambito:"IDHS / SAME / UBA",tipoCurso:"Curso",tipo:"Semestral",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
-    {id:4,nombre:"Rotación PFO / IAR · UBA en el SAME",dest:"Alumnos UBA (último año)",carga:"—",ambito:"UBA / SAME / Cátedra Libre",tipoCurso:"Curso",tipo:"Mensual",estado:"Activo",clases:[],alumnos:[],ediciones:[{id:1,num:"Edición junio 2025",inicio:"2025-06-25",fin:"2025-07-25",estado:"En curso",alumnos:[]}]},
-    {id:5,nombre:"Capacitación residentes 1° año GCBA",dest:"Médicos residentes",carga:"—",ambito:"SAME / GCBA",tipoCurso:"Capacitación",tipo:"Anual",estado:"Activo",clases:[{id:1,titulo:"Clase inaugural",fecha:"2025-06-24",docente:"Dra. Laura Ruibal",dur:"3 hs.",modal:"Presencial"}],alumnos:[],ediciones:[]},
-    {id:6,nombre:"Extricación y extracción rápida · Bomberos",dest:"Bomberos",carga:"—",ambito:"SAME",tipoCurso:"Capacitación",tipo:"Por agenda",estado:"Activo",clases:[{id:1,titulo:"Taller práctico extricación vehicular",fecha:"2025-06-24",docente:"Fiumara + Rivas",dur:"4 hs.",modal:"Presencial"}],alumnos:[],ediciones:[]},
-    {id:7,nombre:"Capacitación continua médicos SAME",dest:"Médicos/as del SAME",carga:"120 hs.",ambito:"SAME / GCBA",tipoCurso:"Capacitación",tipo:"Anual",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
-    {id:8,nombre:"Curso para residentes de medicina familiar",dest:"Residentes MF",carga:"—",ambito:"IDHS / GCBA",tipoCurso:"Curso",tipo:"Por agenda",estado:"Programado",clases:[],alumnos:[],ediciones:[]},
-    {id:9,nombre:"Webinars y jornadas temáticas",dest:"Médicos/as SAME y AMM",carga:"Variable",ambito:"SAME / AMM / IDHS",tipoCurso:"Jornada",tipo:"Por agenda",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
-    {id:10,nombre:"Curso CESAC",dest:"—",carga:"—",ambito:"SAME",tipoCurso:"Curso",tipo:"Por agenda",estado:"En desarrollo",clases:[],alumnos:[],ediciones:[]}
-  ],
-  docentes:[
-    {id:1,apellido:"Crescenti",nombre:"Alberto",rol:"Director General SAME",mat:"",esp:"Emergentología",tel:"",mail:"",dias:["Por agenda"]},
-    {id:2,apellido:"Etchenique",nombre:"Federico",rol:"Director de Emergencias",mat:"",esp:"Emergentología",tel:"",mail:"",dias:["Por agenda"]},
-    {id:3,apellido:"Fiumara",nombre:"Emiliano",rol:"Médico emergentólogo",mat:"",esp:"Emergentología",tel:"",mail:"",dias:["Por agenda"]},
-    {id:4,apellido:"Carchini",nombre:"Juan",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:5,apellido:"Noir",nombre:"Juan",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:6,apellido:"Dadic",nombre:"Francisco",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:7,apellido:"Ruibal",nombre:"Laura",rol:"Médica emergentóloga",mat:"",esp:"Emergentología",tel:"",mail:"",dias:["Martes"]},
-    {id:8,apellido:"Maneiro",nombre:"Agustina",rol:"Médica emergentóloga",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:9,apellido:"Cohen",nombre:"Roberto",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:10,apellido:"Montessi",nombre:"Jorge",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:11,apellido:"Mosca",nombre:"Daniel",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:12,apellido:"Fausto",nombre:"Adrián",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:13,apellido:"Crescenti",nombre:"Daniel",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:14,apellido:"Maffia",nombre:"Santiago",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:15,apellido:"Fontana",nombre:"Florencia",rol:"Médica emergentóloga",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:16,apellido:"Ciaramiraro",nombre:"Vanina",rol:"Médica emergentóloga",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:17,apellido:"Lauretta",nombre:"Paolo",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:18,apellido:"Gallardo",nombre:"Ezequiel",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:19,apellido:"Mazzoglio y Nabar",nombre:"Martín",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:20,apellido:"De Bonis",nombre:"Walter",rol:"Médico emergentólogo",mat:"",esp:"",tel:"",mail:"",dias:[]},
-    {id:21,apellido:"Rivas",nombre:"Rolando",rol:"Técnico / instructor",mat:"",esp:"Rescate",tel:"",mail:"",dias:["Por agenda"]},
-    {id:22,apellido:"Slipak",nombre:"Diego",rol:"Coordinador del Programa",mat:"",esp:"Emergentología",tel:"",mail:"",dni:"31916859",dias:["Lunes","Martes","Miércoles","Jueves","Viernes"]}
-  ],
-  agenda:[
-    {id:1,titulo:"Rotación alumnos PFO / IAR",fecha:"2025-06-25",hora:"08:00",doc:"Equipo docente",sede:"SAME Central",notas:"",color:"#4a3580"},
-    {id:2,titulo:"Capacitación médicos residentes 1° año GCBA",fecha:"2025-06-24",hora:"09:00",doc:"Dra. Laura Ruibal",sede:"SAME Central",notas:"",color:"#1a3a5c"},
-    {id:3,titulo:"Extricación y extracción rápida · Bomberos",fecha:"2025-06-24",hora:"09:00",doc:"Fiumara + Rivas",sede:"SAME Central",notas:"",color:"#b85c00"}
-  ],
-  clasesBib:[], // biblioteca global de clases
-  nextId:11,nextActId:4,nextClaseId:1,
+  cursos:[],
+  docentes:[],
+  agenda:[],
+  clasesBib:[],
+  nextId:1,nextActId:1,nextClaseId:1,
   cursoActual:null,edicionActual:null
 };
 
@@ -2719,6 +2691,7 @@ function guardarEdicionAlumnoG(){
   a.mail=document.getElementById('alg-e-mail').value.trim();
   a.cel=document.getElementById('alg-e-cel').value.trim();
   a.estado=document.getElementById('alg-e-es').value;
+  dbGuardarAlumno(a,algActual.cursoId,algActual.edicionId||null);
   closeM('m-alg-editar');
   abrirAlumnoG(algActual.cursoId,algActual.edicionId,algActual.alumnoId);
   updateBdg();
@@ -3629,9 +3602,14 @@ function procesarImpG(){
       return;
     }
 
-    var nuevoAl=Object.assign({},al,{id:0,estado:estado});
-    if(destArr){nuevoAl.id=nid(destArr);destArr.push(nuevoAl);}
-    else{if(!DB._pendientes)DB._pendientes=[];nuevoAl.id=nid(DB._pendientes);DB._pendientes.push(nuevoAl);}
+    var nuevoAl=Object.assign({},al,{id:0,estado:estado,_nuevo:true});
+    if(destArr){
+      nuevoAl.id=nid(destArr);destArr.push(nuevoAl);
+      // Guardar en Supabase
+      var cIdImp=parseInt(document.getElementById('alg-imp-curso').value)||null;
+      var eIdImp=parseInt(document.getElementById('alg-imp-edicion').value)||null;
+      dbGuardarAlumno(nuevoAl,cIdImp,eIdImp||null);
+    }else{if(!DB._pendientes)DB._pendientes=[];nuevoAl.id=nid(DB._pendientes);DB._pendientes.push(nuevoAl);}
     importados++;
   });
 
