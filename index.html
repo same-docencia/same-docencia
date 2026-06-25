@@ -1385,8 +1385,11 @@ async function supa(tabla, metodo, body, filtro){
       'apikey':SUPA_KEY,
       'Authorization':'Bearer '+SUPA_KEY,
       'Content-Type':'application/json',
-      'Prefer':prefer
-    }
+      'Prefer':prefer,
+      'Cache-Control':'no-cache, no-store, must-revalidate',
+      'Pragma':'no-cache'
+    },
+    cache:'no-store'
   };
   if(body)opts.body=JSON.stringify(body);
   try{
@@ -3836,30 +3839,74 @@ async function recargarDatos(){
   setSyncStatus('sincronizando');
   var ok=await cargarDesdeSupa();
   if(ok){
-    // Rerenderizar la página activa sin cambiar de sección
-    var paginaActiva=document.querySelector('.page.active');
-    if(paginaActiva){
-      var id=paginaActiva.id.replace('page-','');
-      if(id==='resumen')renderResumen();
-      else if(id==='cursos')renderCursosExp();
-      else if(id==='agenda'){renderAgendaLista();renderCal();}
-      else if(id==='docentes')renderDoc();
-      else if(id==='alumnos-global')renderAlumnosGlobal();
-      else if(id==='clases')renderClasesBib();
-      else if(id==='informes'){} // no rerenderizar informes automático
-    }
+    rerenderPaginaActiva();
     buildChips();updateBdg();
   }
 }
 
+function rerenderPaginaActiva(){
+  // Rerenderizar siempre todas las vistas para garantizar sincronización
+  try{
+    var paginaActiva=document.querySelector('.page.active');
+    if(!paginaActiva)return;
+    var id=paginaActiva.id.replace('page-','');
+    if(id==='resumen'){
+      renderResumen();
+    } else if(id==='cursos'){
+      // Si hay un curso abierto, también lo recarga
+      var det=document.getElementById('curso-det');
+      if(det&&det.style.display!=='none'&&DB.cursoActual){
+        var c=DB.cursos.find(function(x){return x.id===DB.cursoActual;});
+        if(c){
+          renderClasesCurso(c);
+          var tieneEd=c.ediciones&&c.ediciones.length>0;
+          document.getElementById('al-sin-ed').style.display=tieneEd?'none':'block';
+          document.getElementById('al-con-ed').style.display=tieneEd?'block':'none';
+          if(!tieneEd)renderAlCurso(c);
+          if(DB.edicionActual){
+            var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual;});
+            if(ed)renderAlEd(ed);
+          }
+          renderEdDet(c);
+        }
+      } else {
+        renderCursosExp();
+      }
+    } else if(id==='agenda'){
+      renderAgendaLista();
+      renderCal();
+      updAgSelCount();
+    } else if(id==='docentes'){
+      var docDet=document.getElementById('doc-det');
+      if(docDet&&docDet.style.display!=='none'){
+        var docId=parseInt(docDet.dataset.id);
+        if(docId)abrirDoc(docId);
+      } else {
+        renderDoc();
+      }
+    } else if(id==='alumnos-global'){
+      var algPerfil=document.getElementById('alg-perfil');
+      if(algPerfil&&algPerfil.style.display!=='none'&&algActual){
+        abrirAlumnoG(algActual.cursoId,algActual.edicionId,algActual.alumnoId);
+      } else {
+        renderAlumnosGlobal();
+      }
+    } else if(id==='clases'){
+      renderClasesBib();
+    }
+  }catch(e){
+    console.error('Error en rerenderPaginaActiva:',e);
+  }
+}
+
 function iniciarAutoRefresh(){
-  // Cada 60 segundos actualiza en segundo plano
+  // Cada 30 segundos actualiza en segundo plano
   if(autoRefreshInterval)clearInterval(autoRefreshInterval);
   autoRefreshInterval=setInterval(function(){
     if(usuarioActual){
       recargarDatos();
     }
-  },60000);
+  },30000);
 }
 
 function detenerAutoRefresh(){
