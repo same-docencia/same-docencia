@@ -472,6 +472,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
       Importar
       <input type="file" accept=".json" style="display:none" onchange="importarJSON(this)">
     </label>
+    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:4px">
+      <span id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0"></span>
+      <span id="sync-txt">—</span>
+    </span>
     <button class="hbtn" onclick="abrirMenuUsuario()" id="btn-usuario" style="background:rgba(255,255,255,.18);gap:6px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       <span id="hdr-usuario-nombre" style="font-size:12px">—</span>
@@ -1367,7 +1371,42 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
 </div></div>
 
 <script>
-// ===== DB =====
+// ===== SUPABASE CLIENT =====
+var SUPA_URL='https://ctvtqsswdirobzbledya.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dnRxc3N3ZGlyb2J6YmxlZHlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODYxNDQsImV4cCI6MjA5Nzk2MjE0NH0.e5uczTvZcwNSrR24Zax6ORMtFEoclXpawadz0u7gllQ';
+
+async function supa(tabla, metodo, body, filtro){
+  var url=SUPA_URL+'/rest/v1/'+tabla+(filtro?'?'+filtro:'');
+  var opts={
+    method:metodo||'GET',
+    headers:{
+      'apikey':SUPA_KEY,
+      'Authorization':'Bearer '+SUPA_KEY,
+      'Content-Type':'application/json',
+      'Prefer': metodo==='POST'?'return=representation':'return=representation'
+    }
+  };
+  if(body)opts.body=JSON.stringify(body);
+  var r=await fetch(url,opts);
+  if(!r.ok){
+    var err=await r.text();
+    console.error('Supabase error',r.status,err);
+    return null;
+  }
+  var txt=await r.text();
+  return txt?JSON.parse(txt):null;
+}
+
+// Helpers
+function supaGet(tabla,filtro){return supa(tabla,'GET',null,filtro);}
+function supaPost(tabla,body){return supa(tabla,'POST',body);}
+function supaPatch(tabla,filtro,body){return supa(tabla,'PATCH',body,filtro);}
+function supaDelete(tabla,filtro){return supa(tabla,'DELETE',null,filtro);}
+
+var SUPABASE_OK=true;
+var CARGANDO=false;
+
+// ===== DB (cache local mientras trabaja) =====
 var DB={
   cursos:[
     {id:1,nombre:"Capacitación inicial para médicos del SAME",dest:"Médicos/as ingresantes",carga:"100 hs.",ambito:"SAME / IDHS",tipoCurso:"Capacitación",tipo:"Anual",estado:"Activo",clases:[],alumnos:[],ediciones:[]},
@@ -1828,6 +1867,7 @@ function editAct(id){
 }
 function delAct(){
   if(!confirm('¿Eliminar esta actividad?'))return;
+  dbEliminarActividad(actEditId);
   DB.agenda=DB.agenda.filter(function(x){return x.id!==actEditId});
   actEditId=null;actDocsSel=[];closeM('m-act');renderAgendaLista();renderCal();renderResumen();
 }
@@ -1841,9 +1881,12 @@ function guardarAct(){
     ev.titulo=t;ev.fecha=document.getElementById('act-f').value;ev.hora=document.getElementById('act-h').value;
     ev.doc=docStr;ev.sede=document.getElementById('act-s').value.trim()||'';
     ev.notas=document.getElementById('act-notas').value.trim();ev.color=col;
+    dbGuardarActividad(ev);
     actEditId=null;
   } else {
-    DB.agenda.push({id:DB.nextActId++,titulo:t,fecha:document.getElementById('act-f').value,hora:document.getElementById('act-h').value,doc:docStr,sede:document.getElementById('act-s').value.trim()||'',notas:document.getElementById('act-notas').value.trim(),color:col});
+    var nuevaAct={id:DB.nextActId++,titulo:t,fecha:document.getElementById('act-f').value,hora:document.getElementById('act-h').value,doc:docStr,sede:document.getElementById('act-s').value.trim()||'',notas:document.getElementById('act-notas').value.trim(),color:col,_nuevo:true};
+    DB.agenda.push(nuevaAct);
+    dbGuardarActividad(nuevaAct);
   }
   document.getElementById('m-act-t').textContent='Nueva actividad';
   document.getElementById('btn-del-act').style.display='none';
@@ -2022,6 +2065,7 @@ function editDocente(){
 function delDocente(){
   var id=parseInt(document.getElementById('doc-det').dataset.id);
   if(!confirm('¿Eliminar este docente?'))return;
+  dbEliminarDocente(id);
   DB.docentes=DB.docentes.filter(function(x){return x.id!==id});
   volverDoc();renderDoc();updateBdg();
 }
@@ -2043,7 +2087,8 @@ function guardarDoc(){
     var dd=document.getElementById('doc-det');
     if(dd&&dd.style.display!=='none')abrirDoc(idParaVolver);
   } else {
-    obj.id=nid(DB.docentes);DB.docentes.push(obj);
+    obj.id=nid(DB.docentes);obj._nuevo=true;DB.docentes.push(obj);
+    dbGuardarDocente(obj);
     docEditId=null;
     closeM('mdoc');
     ['doc-ap','doc-nm','doc-rol','doc-mat','doc-mat2','doc-dni','doc-esp','doc-tel','doc-mail'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});
@@ -2098,7 +2143,7 @@ function editClaseBib(id){
   document.getElementById('bc-desc').value=cl.desc||'';
   openM('m-new-clase');
 }
-function delClaseBib(id){DB.clasesBib=DB.clasesBib.filter(function(x){return x.id!==id});renderClasesBib();updateBdg()}
+function delClaseBib(id){dbEliminarMaterial(id);DB.clasesBib=DB.clasesBib.filter(function(x){return x.id!==id});renderClasesBib();updateBdg()}
 
 // Seleccionar clase desde biblioteca para agregar a curso
 function renderSelClases(){
@@ -2122,7 +2167,9 @@ function agregarClaseDeBib(id){
 // GUARDAR VARIOS
 function guardarCurso(){
   var n=document.getElementById('nc-n').value.trim();if(!n)return;
-  DB.cursos.push({id:DB.nextId++,nombre:n,dest:document.getElementById('nc-d').value.trim()||'—',carga:document.getElementById('nc-c').value.trim()||'—',ambito:document.getElementById('nc-a').value.trim()||'—',tipoCurso:document.getElementById('nc-tipo').value,tipo:document.getElementById('nc-t').value,estado:document.getElementById('nc-e').value,finicio:document.getElementById('nc-finicio').value,ffin:document.getElementById('nc-ffin').value,clases:[],alumnos:[],ediciones:[]});
+  var nuevo={id:DB.nextId++,nombre:n,dest:document.getElementById('nc-d').value.trim()||'—',carga:document.getElementById('nc-c').value.trim()||'—',ambito:document.getElementById('nc-a').value.trim()||'—',tipoCurso:document.getElementById('nc-tipo').value,tipo:document.getElementById('nc-t').value,estado:document.getElementById('nc-e').value,finicio:document.getElementById('nc-finicio').value,ffin:document.getElementById('nc-ffin').value,clases:[],alumnos:[],ediciones:[],_nuevo:true};
+  DB.cursos.push(nuevo);
+  dbGuardarCurso(nuevo);
   closeM('m-nc');['nc-n','nc-d','nc-c','nc-a','nc-finicio','nc-ffin'].forEach(function(i){document.getElementById(i).value=''});
   renderCursosExp();buildChips();updateBdg();
 }
@@ -2146,20 +2193,23 @@ function updCurso(){
   c.tipo=document.getElementById('ec-t').value;c.estado=document.getElementById('ec-e').value;
   c.finicio=document.getElementById('ec-finicio').value;
   c.ffin=document.getElementById('ec-ffin').value;
+  dbGuardarCurso(c);
   closeM('m-ec');abrirCurso(DB.cursoActual);
 }
-function delCursoActual(){if(!confirm('¿Eliminar este curso?'))return;DB.cursos=DB.cursos.filter(function(x){return x.id!==DB.cursoActual});volverCursos();updateBdg()}
+function delCursoActual(){if(!confirm('¿Eliminar este curso?'))return;dbEliminarCurso(DB.cursoActual);DB.cursos=DB.cursos.filter(function(x){return x.id!==DB.cursoActual});volverCursos();updateBdg()}
 function guardarClase(){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
   var t=document.getElementById('cl-t').value.trim();if(!t)return;
   var docStr=clDocsSel.length?clDocsSel.join(' / '):'—';
-  c.clases.push({id:nid(c.clases),titulo:t,fecha:document.getElementById('cl-f').value,docente:docStr,dur:document.getElementById('cl-d').value.trim()||'—',modal:document.getElementById('cl-m').value});
+  var nuevaCl={id:nid(c.clases),titulo:t,fecha:document.getElementById('cl-f').value,docente:docStr,dur:document.getElementById('cl-d').value.trim()||'—',modal:document.getElementById('cl-m').value,_nuevo:true};
+  c.clases.push(nuevaCl);
+  dbGuardarClase(nuevaCl,c.id);
   clDocsSel=[];closeM('m-cl');['cl-t','cl-f','cl-d'].forEach(function(i){document.getElementById(i).value=''});
   var qd=document.getElementById('q-doc-cl');if(qd)qd.value='';
   document.getElementById('cl-doc-sel').innerHTML='';
   renderClasesCurso(c);
 }
-function delClase(cid){var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;c.clases=c.clases.filter(function(x){return x.id!==cid});renderClasesCurso(c)}
+function delClase(cid){var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;dbEliminarClase(cid);c.clases=c.clases.filter(function(x){return x.id!==cid});renderClasesCurso(c)}
 function guardarAl(){
   var ap=document.getElementById('al-ap').value.trim();var nm=document.getElementById('al-nm').value.trim();if(!ap&&!nm)return;
   var dni=document.getElementById('al-dn').value.trim();
@@ -2205,6 +2255,7 @@ function guardarAl(){
 }
 function delAl(aid){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
+  dbEliminarAlumno(aid);
   if(DB.edicionActual!=null){var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(!ed)return;ed.alumnos=ed.alumnos.filter(function(x){return x.id!==aid});renderAlEd(ed);}
   else{c.alumnos=c.alumnos.filter(function(x){return x.id!==aid});renderAlCurso(c)}
   updSelCnt();updateBdg();
@@ -2223,11 +2274,13 @@ function impArchivo(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();
 function guardarEd(){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
   var n=document.getElementById('ed-n').value.trim();if(!n)return;
-  c.ediciones.push({id:nid(c.ediciones),num:n,inicio:document.getElementById('ed-i').value,fin:document.getElementById('ed-f').value,estado:document.getElementById('ed-e').value,alumnos:[]});
+  var nuevaEd={id:nid(c.ediciones),num:n,inicio:document.getElementById('ed-i').value,fin:document.getElementById('ed-f').value,estado:document.getElementById('ed-e').value,alumnos:[],_nuevo:true};
+  c.ediciones.push(nuevaEd);
+  dbGuardarEdicion(nuevaEd,c.id);
   closeM('m-ed');['ed-n','ed-i','ed-f'].forEach(function(i){document.getElementById(i).value=''});
   renderEdDet(c);document.getElementById('al-sin-ed').style.display='none';document.getElementById('al-con-ed').style.display='block';updateBdg();
 }
-function delEd(eid){var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;c.ediciones=c.ediciones.filter(function(x){return x.id!==eid});renderEdDet(c);if(!c.ediciones.length){document.getElementById('al-sin-ed').style.display='block';document.getElementById('al-con-ed').style.display='none'}updateBdg()}
+function delEd(eid){var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;dbEliminarEdicion(eid);c.ediciones=c.ediciones.filter(function(x){return x.id!==eid});renderEdDet(c);if(!c.ediciones.length){document.getElementById('al-sin-ed').style.display='block';document.getElementById('al-con-ed').style.display='none'}updateBdg()}
 
 // EXPORT / IMPORT
 function exportarJSON(){
@@ -3655,6 +3708,7 @@ function crearDocDesdeAct(){
     cel:'',dias:[]
   };
   DB.docentes.push(nuevo);
+  dbGuardarDocente(nuevo);
   updateBdg();
   // Seleccionarlo automáticamente
   var nombreCompleto=ap+', '+nm;
@@ -3777,9 +3831,296 @@ var shakeStyle=document.createElement('style');
 shakeStyle.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
 document.head.appendChild(shakeStyle);
 
-// INIT — NO inicializar la app hasta que haga login
-// renderResumen();buildChips();updateBdg(); ← se llama desde intentarLogin()
-// Solo mostrar la pantalla de login
+// ===== SYNC CON SUPABASE =====
+function setSyncStatus(estado){
+  // estado: 'sincronizando' | 'ok' | 'error' | 'offline'
+  var dot=document.getElementById('sync-dot');
+  var txt=document.getElementById('sync-txt');
+  if(!dot||!txt)return;
+  var colores={sincronizando:'#f0c040',ok:'#4caf50',error:'#f44336',offline:'#aaa'};
+  var textos={sincronizando:'Sincronizando…',ok:'Sincronizado',error:'Sin conexión',offline:'Local'};
+  dot.style.background=colores[estado]||'#aaa';
+  txt.textContent=textos[estado]||estado;
+}
+
+async function cargarDesdeSupa(){
+  setSyncStatus('sincronizando');
+  try{
+    // Cargar todo en paralelo
+    var [cursos,ediciones,docentes,alumnos,clases,materiales,agenda,usuarios]=await Promise.all([
+      supaGet('cursos','order=id'),
+      supaGet('ediciones','order=id'),
+      supaGet('docentes','order=apellido'),
+      supaGet('alumnos','order=id'),
+      supaGet('clases','order=id'),
+      supaGet('materiales','order=id'),
+      supaGet('agenda','order=fecha'),
+      supaGet('usuarios')
+    ]);
+
+    if(cursos===null){setSyncStatus('error');return false;}
+
+    // Mapear a estructura local
+    DB.cursos=(cursos||[]).map(function(c){
+      var edsDelCurso=(ediciones||[]).filter(function(e){return e.curso_id===c.id;});
+      return {
+        id:c.id,nombre:c.nombre,dest:c.dest||'—',carga:c.carga||'—',
+        ambito:c.ambito||'—',tipoCurso:c.tipo_curso||'Curso',tipo:c.tipo||'Anual',
+        estado:c.estado||'Activo',finicio:c.finicio||'',ffin:c.ffin||'',
+        clases:(clases||[]).filter(function(cl){return cl.curso_id===c.id;}).map(function(cl){
+          return {id:cl.id,titulo:cl.titulo,fecha:cl.fecha||'',docente:cl.docente||'—',dur:cl.dur||'—',modal:cl.modal||'Presencial'};
+        }),
+        alumnos:(alumnos||[]).filter(function(a){return a.curso_id===c.id&&!a.edicion_id;}).map(mapAlumno),
+        ediciones:edsDelCurso.map(function(ed){
+          return {
+            id:ed.id,num:ed.num,inicio:ed.inicio||'',fin:ed.fin||'',estado:ed.estado||'Programada',
+            alumnos:(alumnos||[]).filter(function(a){return a.edicion_id===ed.id;}).map(mapAlumno)
+          };
+        })
+      };
+    });
+
+    DB.docentes=(docentes||[]).map(function(d){
+      return {id:d.id,apellido:d.apellido||'',nombre:d.nombre||'',rol:d.rol||'—',
+        mat:d.mat||'',dni:d.dni||'',esp:d.esp||'',tel:d.tel||'',mail:d.mail||'',
+        cel:d.cel||'',dias:d.dias||[]};
+    });
+
+    DB.agenda=(agenda||[]).map(function(ev){
+      return {id:ev.id,titulo:ev.titulo,fecha:ev.fecha||'',hora:ev.hora||'',
+        doc:ev.doc||'—',sede:ev.sede||'',notas:ev.notas||'',color:ev.color||'#1a3a5c'};
+    });
+
+    DB.clasesBib=(materiales||[]).map(function(m){
+      return {id:m.id,nombre:m.nombre,docente:m.docente||'—',anio:m.anio||'',
+        tema:m.tema||'—',dur:m.dur||'—',modal:m.modal||'Presencial',
+        link:m.link||'',desc:m.descripcion||''};
+    });
+
+    // Calcular nextId
+    var maxCurso=DB.cursos.reduce(function(m,c){return Math.max(m,c.id);},0);
+    DB.nextId=maxCurso+1;
+    var maxAct=DB.agenda.reduce(function(m,e){return Math.max(m,e.id);},0);
+    DB.nextActId=maxAct+1;
+    var maxMat=DB.clasesBib.reduce(function(m,e){return Math.max(m,e.id);},0);
+    DB.nextClaseId=maxMat+1;
+
+    setSyncStatus('ok');
+    return true;
+  }catch(e){
+    console.error('Error cargando Supabase:',e);
+    setSyncStatus('error');
+    return false;
+  }
+}
+
+function mapAlumno(a){
+  return {id:a.id,apellido:a.apellido||'',nombre:a.nombre||'',
+    prof:a.prof||'—',inst:a.inst||'—',dni:a.dni||'',
+    mail:a.mail||'',cel:a.cel||'',estado:a.estado||'Inscripto'};
+}
+
+// ===== OPERACIONES CRUD CON SUPABASE =====
+
+// CURSOS
+async function dbGuardarCurso(c){
+  var body={nombre:c.nombre,dest:c.dest,carga:c.carga,ambito:c.ambito,
+    tipo_curso:c.tipoCurso,tipo:c.tipo,estado:c.estado,finicio:c.finicio||null,ffin:c.ffin||null};
+  if(c._nuevo){
+    var res=await supaPost('cursos',body);
+    if(res&&res[0])c.id=res[0].id;
+  } else {
+    await supaPatch('cursos','id=eq.'+c.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarCurso(id){
+  await supaDelete('cursos','id=eq.'+id);setSyncStatus('ok');
+}
+
+// DOCENTES
+async function dbGuardarDocente(d){
+  var body={apellido:d.apellido,nombre:d.nombre,rol:d.rol,mat:d.mat,
+    dni:d.dni||null,esp:d.esp,tel:d.tel,mail:d.mail,cel:d.cel||'',dias:d.dias};
+  if(d._nuevo){
+    var res=await supaPost('docentes',body);
+    if(res&&res[0])d.id=res[0].id;
+  } else {
+    await supaPatch('docentes','id=eq.'+d.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarDocente(id){
+  await supaDelete('docentes','id=eq.'+id);setSyncStatus('ok');
+}
+
+// ALUMNOS
+async function dbGuardarAlumno(a,cursoId,edicionId){
+  var body={apellido:a.apellido,nombre:a.nombre,prof:a.prof,inst:a.inst,
+    dni:a.dni||null,mail:a.mail||null,cel:a.cel||null,estado:a.estado,
+    curso_id:cursoId,edicion_id:edicionId||null};
+  if(a._nuevo){
+    var res=await supaPost('alumnos',body);
+    if(res&&res[0])a.id=res[0].id;
+  } else {
+    await supaPatch('alumnos','id=eq.'+a.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarAlumno(id){
+  await supaDelete('alumnos','id=eq.'+id);setSyncStatus('ok');
+}
+
+// CLASES
+async function dbGuardarClase(cl,cursoId){
+  var body={titulo:cl.titulo,fecha:cl.fecha||null,docente:cl.docente,
+    dur:cl.dur,modal:cl.modal,curso_id:cursoId};
+  if(cl._nuevo){
+    var res=await supaPost('clases',body);
+    if(res&&res[0])cl.id=res[0].id;
+  } else {
+    await supaPatch('clases','id=eq.'+cl.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarClase(id){
+  await supaDelete('clases','id=eq.'+id);setSyncStatus('ok');
+}
+
+// EDICIONES
+async function dbGuardarEdicion(ed,cursoId){
+  var body={num:ed.num,inicio:ed.inicio||null,fin:ed.fin||null,estado:ed.estado,curso_id:cursoId};
+  if(ed._nuevo){
+    var res=await supaPost('ediciones',body);
+    if(res&&res[0])ed.id=res[0].id;
+  } else {
+    await supaPatch('ediciones','id=eq.'+ed.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarEdicion(id){
+  await supaDelete('ediciones','id=eq.'+id);setSyncStatus('ok');
+}
+
+// AGENDA
+async function dbGuardarActividad(ev){
+  var body={titulo:ev.titulo,fecha:ev.fecha||null,hora:ev.hora||null,
+    doc:ev.doc,sede:ev.sede||null,notas:ev.notas||null,color:ev.color};
+  if(ev._nuevo){
+    var res=await supaPost('agenda',body);
+    if(res&&res[0])ev.id=res[0].id;
+  } else {
+    await supaPatch('agenda','id=eq.'+ev.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarActividad(id){
+  await supaDelete('agenda','id=eq.'+id);setSyncStatus('ok');
+}
+
+// MATERIALES
+async function dbGuardarMaterial(m){
+  var body={nombre:m.nombre,docente:m.docente,anio:m.anio,tema:m.tema,
+    dur:m.dur,modal:m.modal,link:m.link||null,descripcion:m.desc||null};
+  if(m._nuevo){
+    var res=await supaPost('materiales',body);
+    if(res&&res[0])m.id=res[0].id;
+  } else {
+    await supaPatch('materiales','id=eq.'+m.id,body);
+  }
+  setSyncStatus('ok');
+}
+async function dbEliminarMaterial(id){
+  await supaDelete('materiales','id=eq.'+id);setSyncStatus('ok');
+}
+
+// CLAVES DE USUARIO en Supabase
+async function getClaveDocSupa(dni){
+  var r=await supaGet('usuarios','dni=eq.'+dni);
+  if(r&&r[0]&&r[0].clave)return r[0].clave;
+  return dni; // default: clave = DNI
+}
+async function setClaveDocSupa(dni,clave){
+  // upsert
+  var r=await supaGet('usuarios','dni=eq.'+dni);
+  if(r&&r[0]){
+    await supaPatch('usuarios','dni=eq.'+dni,{clave:clave,updated_at:new Date().toISOString()});
+  } else {
+    await supaPost('usuarios',{dni:dni,clave:clave});
+  }
+}
+
+// ===== LOGIN ADAPTADO A SUPABASE =====
+async function intentarLogin(){
+  var dni=document.getElementById('login-dni').value.trim();
+  var pass=document.getElementById('login-pass').value.trim();
+  if(!dni||!pass){mostrarErrorLogin('Completá tu DNI y clave.');return;}
+
+  setSyncStatus('sincronizando');
+  document.querySelector('#login-screen button').disabled=true;
+
+  try{
+    // Cargar datos desde Supabase
+    var cargado=await cargarDesdeSupa();
+    if(!cargado){
+      mostrarErrorLogin('No se pudo conectar al servidor. Verificá tu conexión.');
+      document.querySelector('#login-screen button').disabled=false;
+      return;
+    }
+
+    // Buscar docente con ese DNI en la DB ya cargada
+    var doc=DB.docentes.find(function(d){return d.dni&&d.dni.trim()===dni;});
+    if(!doc){
+      mostrarErrorLogin('DNI no encontrado. Pedile al coordinador que lo cargue.');
+      document.querySelector('#login-screen button').disabled=false;
+      return;
+    }
+
+    // Verificar clave en Supabase
+    var claveCorrecta=await getClaveDocSupa(dni);
+    if(pass!==claveCorrecta){
+      mostrarErrorLogin('Clave incorrecta. Tu clave inicial es tu mismo DNI.');
+      document.querySelector('#login-screen button').disabled=false;
+      return;
+    }
+
+    // Login exitoso
+    usuarioActual={id:doc.id,apellido:doc.apellido,nombre:doc.nombre,dni:dni,rol:doc.rol};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('login-pass').value='';
+    document.getElementById('login-dni').value='';
+    var nombreCorto=doc.nombre.split(' ')[0]+' '+doc.apellido;
+    document.getElementById('hdr-usuario-nombre').textContent=nombreCorto;
+    renderResumen();buildChips();updateBdg();
+    mostrarNavMob();
+
+  }catch(e){
+    mostrarErrorLogin('Error de conexión: '+e.message);
+    document.querySelector('#login-screen button').disabled=false;
+  }
+}
+
+// Cambiar clave: ahora guarda en Supabase
+async function guardarNuevaClave(){
+  var actual=document.getElementById('cc-actual').value.trim();
+  var nueva=document.getElementById('cc-nueva').value.trim();
+  var rep=document.getElementById('cc-repetir').value.trim();
+  var errEl=document.getElementById('cc-error');
+  var claveActual=await getClaveDocSupa(usuarioActual.dni);
+  if(actual!==claveActual){errEl.textContent='La clave actual no es correcta.';errEl.style.display='block';return;}
+  if(nueva.length<4){errEl.textContent='Mínimo 4 caracteres.';errEl.style.display='block';return;}
+  if(nueva!==rep){errEl.textContent='Las claves nuevas no coinciden.';errEl.style.display='block';return;}
+  await setClaveDocSupa(usuarioActual.dni,nueva);
+  closeM('m-cambiar-clave');
+  alert('✓ Clave actualizada.');
+}
+
+// CSS shake
+var shakeStyle=document.createElement('style');
+shakeStyle.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
+document.head.appendChild(shakeStyle);
+
+// INIT
 document.getElementById('login-screen').style.display='flex';
 </script>
 <!-- MENÚ USUARIO -->
