@@ -472,10 +472,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
       Importar
       <input type="file" accept=".json" style="display:none" onchange="importarJSON(this)">
     </label>
-    <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:4px">
-      <span id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0"></span>
-      <span id="sync-txt">—</span>
-    </span>
+    <button onclick="recargarDatos()" id="btn-sync" class="hbtn" style="gap:5px" title="Actualizar datos">
+      <svg id="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      <span id="sync-txt" style="font-size:11px">—</span>
+    </button>
     <button class="hbtn" onclick="abrirMenuUsuario()" id="btn-usuario" style="background:rgba(255,255,255,.18);gap:6px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       <span id="hdr-usuario-nombre" style="font-size:12px">—</span>
@@ -3752,10 +3752,12 @@ function togglePassVis(){
 }
 
 function cerrarSesion(){
+  detenerAutoRefresh();
   usuarioActual=null;
   document.getElementById('hdr-usuario-nombre').textContent='—';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('mob-nav').style.display='none';
+  setSyncStatus('offline');
 }
 
 function abrirMenuUsuario(){
@@ -3806,19 +3808,62 @@ function guardarNuevaClave(){
 
 // CSS shake animation
 var shakeStyle=document.createElement('style');
-shakeStyle.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
+shakeStyle.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} .sincronizando #sync-icon{animation:spin 1s linear infinite}';
 document.head.appendChild(shakeStyle);
 
 // ===== SYNC CON SUPABASE =====
+var autoRefreshInterval=null;
+var ultimaSync=null;
+
 function setSyncStatus(estado){
-  // estado: 'sincronizando' | 'ok' | 'error' | 'offline'
-  var dot=document.getElementById('sync-dot');
+  var btn=document.getElementById('btn-sync');
   var txt=document.getElementById('sync-txt');
-  if(!dot||!txt)return;
-  var colores={sincronizando:'#f0c040',ok:'#4caf50',error:'#f44336',offline:'#aaa'};
-  var textos={sincronizando:'Sincronizando…',ok:'Sincronizado',error:'Sin conexión',offline:'Local'};
-  dot.style.background=colores[estado]||'#aaa';
+  if(!txt)return;
+  var textos={sincronizando:'Actualizando…',ok:'Sincronizado',error:'Sin conexión',offline:'Local'};
   txt.textContent=textos[estado]||estado;
+  if(btn){
+    if(estado==='sincronizando'){btn.classList.add('sincronizando');btn.style.opacity='1';}
+    else{btn.classList.remove('sincronizando');btn.style.opacity=estado==='ok'?'.8':'1';}
+    if(estado==='error')btn.style.background='rgba(244,67,54,.3)';
+    else if(estado==='ok')btn.style.background='rgba(76,175,80,.25)';
+    else btn.style.background='rgba(255,255,255,.12)';
+  }
+  if(estado==='ok')ultimaSync=new Date();
+}
+
+async function recargarDatos(){
+  if(!usuarioActual)return;
+  setSyncStatus('sincronizando');
+  var ok=await cargarDesdeSupa();
+  if(ok){
+    // Rerenderizar la página activa sin cambiar de sección
+    var paginaActiva=document.querySelector('.page.active');
+    if(paginaActiva){
+      var id=paginaActiva.id.replace('page-','');
+      if(id==='resumen')renderResumen();
+      else if(id==='cursos')renderCursosExp();
+      else if(id==='agenda'){renderAgendaLista();renderCal();}
+      else if(id==='docentes')renderDoc();
+      else if(id==='alumnos-global')renderAlumnosGlobal();
+      else if(id==='clases')renderClasesBib();
+      else if(id==='informes'){} // no rerenderizar informes automático
+    }
+    buildChips();updateBdg();
+  }
+}
+
+function iniciarAutoRefresh(){
+  // Cada 60 segundos actualiza en segundo plano
+  if(autoRefreshInterval)clearInterval(autoRefreshInterval);
+  autoRefreshInterval=setInterval(function(){
+    if(usuarioActual){
+      recargarDatos();
+    }
+  },60000);
+}
+
+function detenerAutoRefresh(){
+  if(autoRefreshInterval){clearInterval(autoRefreshInterval);autoRefreshInterval=null;}
 }
 
 async function cargarDesdeSupa(){
@@ -4071,6 +4116,7 @@ async function intentarLogin(){
     document.getElementById('hdr-usuario-nombre').textContent=nombreCorto;
     renderResumen();buildChips();updateBdg();
     mostrarNavMob();
+    iniciarAutoRefresh();
 
   }catch(e){
     mostrarErrorLogin('Error de conexión: '+e.message);
