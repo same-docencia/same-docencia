@@ -1515,7 +1515,8 @@ function renderResumen(){
   if(!s.length){ag.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--texto2);font-style:italic">Sin actividades</div>';return}
   s.slice(0,5).forEach(function(ev){
     var d=document.createElement('div');d.style.cssText='display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-bottom:1px solid var(--borde);cursor:pointer';
-    d.innerHTML='<div style="width:4px;border-radius:2px;background:'+ev.color+';align-self:stretch;flex-shrink:0"></div><div style="flex:1"><div style="font-size:11px;color:var(--texto2);text-transform:uppercase;letter-spacing:.05em">'+fmt(ev.fecha)+(ev.hora?' · '+ev.hora:'')+'</div><div style="font-size:13px;font-weight:600;margin:2px 0">'+ev.titulo+'</div><div style="font-size:12px;color:var(--texto2)">'+ev.doc+(ev.sede?' · '+ev.sede:'')+'</div></div>';
+    var cTag=ev.curso_nombre?'<span style="font-size:11px;background:var(--azul-bg);color:var(--azul);padding:1px 7px;border-radius:20px;font-weight:500;margin-left:6px">'+ev.curso_nombre+'</span>':'';
+    d.innerHTML='<div style="width:4px;border-radius:2px;background:'+ev.color+';align-self:stretch;flex-shrink:0"></div><div style="flex:1"><div style="font-size:11px;color:var(--texto2);text-transform:uppercase;letter-spacing:.05em">'+fmt(ev.fecha)+(ev.hora?' · '+ev.hora:'')+'</div><div style="font-size:13px;font-weight:600;margin:2px 0">'+ev.titulo+cTag+'</div><div style="font-size:12px;color:var(--texto2)">'+ev.doc+(ev.sede?' · '+ev.sede:'')+'</div></div>';
     d.onclick=function(){navTo('agenda',null);editAct(ev.id)};
     ag.appendChild(d);
   });
@@ -1721,9 +1722,9 @@ function renderAgendaLista(){
       e.appendChild(stripe);
       // Contenido
       var body=document.createElement('div');body.style.flex='1';
-      body.innerHTML='<div class="ag-ttl">'+ev.titulo+'</div>'
+      var cursoTag=ev.curso_nombre?'<span style="font-size:11px;background:var(--azul-bg);color:var(--azul);padding:2px 8px;border-radius:20px;font-weight:500;margin-left:7px;vertical-align:middle">'+ev.curso_nombre+'</span>':'';
+      body.innerHTML='<div class="ag-ttl">'+ev.titulo+cursoTag+'</div>'
         +'<div class="ag-det">'+(ev.hora?ev.hora+' · ':'')+ev.doc+(ev.sede?' · '+ev.sede:'')
-        +(ev.curso_nombre?'<br><span style="font-size:11px;color:var(--azul);font-weight:500">📚 '+ev.curso_nombre+'</span>':'')
         +(ev.notas?'<br><span style="font-style:italic">'+ev.notas+'</span>':'')+'</div>';
       e.appendChild(body);
       // Botones editar/mail
@@ -3998,7 +3999,8 @@ async function cargarDesdeSupa(){
 
     DB.agenda=(agenda||[]).map(function(ev){
       return {id:ev.id,titulo:ev.titulo,fecha:ev.fecha||'',hora:ev.hora||'',
-        doc:ev.doc||'—',sede:ev.sede||'',notas:ev.notas||'',color:ev.color||'#1a3a5c'};
+        doc:ev.doc||'—',sede:ev.sede||'',notas:ev.notas||'',color:ev.color||'#1a3a5c',
+        curso_nombre:ev.curso_nombre||''};
     });
 
     DB.clasesBib=(materiales||[]).map(function(m){
@@ -4131,7 +4133,8 @@ async function dbEliminarEdicion(id){
 // AGENDA
 async function dbGuardarActividad(ev){
   var body={titulo:ev.titulo,fecha:ev.fecha||null,hora:ev.hora||null,
-    doc:ev.doc,sede:ev.sede||null,notas:ev.notas||null,color:ev.color};
+    doc:ev.doc,sede:ev.sede||null,notas:ev.notas||null,color:ev.color,
+    curso_nombre:ev.curso_nombre||null};
   try{
     if(ev._nuevo){
       var res=await supaPost('agenda',body);
