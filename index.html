@@ -1106,14 +1106,21 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px" id="act-doc-seleccionados"></div>
   </div>
   <div class="fg"><label class="flbl">Sede</label><input type="text" id="act-s"></div>
+  <div class="fg"><label class="flbl">Curso relacionado (opcional)</label>
+    <select id="act-curso-rel">
+      <option value="">— Sin curso asociado —</option>
+    </select>
+  </div>
   <div class="fg"><label class="flbl">Notas</label><textarea id="act-notas" style="height:60px" placeholder="Notas adicionales (opcional)"></textarea></div>
   <div class="fg"><label class="flbl">Color</label>
     <div style="display:flex;gap:7px;margin-top:5px" id="act-cols">
-      <span style="width:22px;height:22px;border-radius:50%;background:#1a3a5c;cursor:pointer;border:3px solid #1a3a5c" class="col-o" data-col="#1a3a5c" onclick="selCol(this)"></span>
-      <span style="width:22px;height:22px;border-radius:50%;background:#1a6b3a;cursor:pointer;border:3px solid transparent" class="col-o" data-col="#1a6b3a" onclick="selCol(this)"></span>
-      <span style="width:22px;height:22px;border-radius:50%;background:#b85c00;cursor:pointer;border:3px solid transparent" class="col-o" data-col="#b85c00" onclick="selCol(this)"></span>
-      <span style="width:22px;height:22px;border-radius:50%;background:#4a3580;cursor:pointer;border:3px solid transparent" class="col-o" data-col="#4a3580" onclick="selCol(this)"></span>
-      <span style="width:22px;height:22px;border-radius:50%;background:#8b1a2e;cursor:pointer;border:3px solid transparent" class="col-o" data-col="#8b1a2e" onclick="selCol(this)"></span>
+      <span class="col-o" data-col="#1a3a5c" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#1a3a5c;cursor:pointer;outline:3px solid #1a3a5c;outline-offset:2px"></span>
+      <span class="col-o" data-col="#1a6b3a" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#1a6b3a;cursor:pointer"></span>
+      <span class="col-o" data-col="#b85c00" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#b85c00;cursor:pointer"></span>
+      <span class="col-o" data-col="#4a3580" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#4a3580;cursor:pointer"></span>
+      <span class="col-o" data-col="#8b1a2e" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#8b1a2e;cursor:pointer"></span>
+      <span class="col-o" data-col="#1a5c5c" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#1a5c5c;cursor:pointer"></span>
+      <span class="col-o" data-col="#5c3a1a" onclick="selCol(this)" style="width:26px;height:26px;border-radius:50%;background:#5c3a1a;cursor:pointer"></span>
     </div>
   </div>
   <div class="mfooter">
@@ -1716,6 +1723,7 @@ function renderAgendaLista(){
       var body=document.createElement('div');body.style.flex='1';
       body.innerHTML='<div class="ag-ttl">'+ev.titulo+'</div>'
         +'<div class="ag-det">'+(ev.hora?ev.hora+' · ':'')+ev.doc+(ev.sede?' · '+ev.sede:'')
+        +(ev.curso_nombre?'<br><span style="font-size:11px;color:var(--azul);font-weight:500">📚 '+ev.curso_nombre+'</span>':'')
         +(ev.notas?'<br><span style="font-style:italic">'+ev.notas+'</span>':'')+'</div>';
       e.appendChild(body);
       // Botones editar/mail
@@ -1815,9 +1823,10 @@ function abrirModalActLimpio(){
   document.getElementById('m-act-t').textContent='Nueva actividad';
   document.getElementById('btn-del-act').style.display='none';
   ['act-t','act-f','act-h','act-s','act-notas'].forEach(function(i){document.getElementById(i).value=''});
+  var acr=document.getElementById('act-curso-rel');if(acr)acr.value='';
   var cols=document.querySelectorAll('#m-act .col-o');
-  cols.forEach(function(c){c.style.border='3px solid transparent'});
-  if(cols.length)cols[0].style.border='3px solid '+cols[0].dataset.col;
+  cols.forEach(function(c){c.style.outline='none';});
+  if(cols.length){cols[0].style.outline='3px solid '+cols[0].dataset.col;cols[0].style.outlineOffset='2px';}
   buildDocList();renderDocsSel();
   openM('m-act');
 }
@@ -1832,12 +1841,13 @@ function editAct(id){
   document.getElementById('act-h').value=ev.hora||'';
   document.getElementById('act-s').value=ev.sede||'';
   document.getElementById('act-notas').value=ev.notas||'';
-  document.querySelectorAll('.col-o').forEach(function(c){c.style.border='3px solid transparent'});
-  var cc=document.querySelector('.col-o[data-col="'+ev.color+'"]');
-  if(cc)cc.style.border='3px solid '+ev.color;
+  document.querySelectorAll('.col-o').forEach(function(c){c.style.outline='none';});
+  var cc=document.querySelector('#m-act .col-o[data-col="'+ev.color+'"]');
+  if(cc){cc.style.outline='3px solid '+ev.color;cc.style.outlineOffset='2px';}
   document.getElementById('btn-del-act').style.display='inline-flex';
   var qd=document.getElementById('q-doc-act');if(qd)qd.value='';
   buildDocList();renderDocsSel();
+  poblarCursosActModal(ev.curso_id||'');
   openM('m-act');
 }
 function delAct(){
@@ -1848,7 +1858,7 @@ function delAct(){
 }
 function guardarAct(){
   var t=document.getElementById('act-t').value.trim();if(!t)return;
-  var activo=document.querySelector('.col-o[style*="border-color"]')||document.querySelector('.col-o');
+  var activo=document.querySelector('.col-o[style*="outline-color"]')||document.querySelector('.col-o[style*="outline:"]')||document.querySelector('.col-o');
   var col=activo?activo.dataset.col:'#1a3a5c';
   var docStr=actDocsSel.length?actDocsSel.join(' / '):'—';
   if(actEditId!=null){
@@ -1856,10 +1866,14 @@ function guardarAct(){
     ev.titulo=t;ev.fecha=document.getElementById('act-f').value;ev.hora=document.getElementById('act-h').value;
     ev.doc=docStr;ev.sede=document.getElementById('act-s').value.trim()||'';
     ev.notas=document.getElementById('act-notas').value.trim();ev.color=col;
+    ev.curso_id=parseInt(document.getElementById('act-curso-rel').value)||null;
+    ev.curso_nombre=(function(){var cid=ev.curso_id;if(!cid)return '';var c=DB.cursos.find(function(x){return x.id===cid;});return c?c.nombre:'';})();
     dbGuardarActividad(ev);
     actEditId=null;
   } else {
-    var nuevaAct={id:DB.nextActId++,titulo:t,fecha:document.getElementById('act-f').value,hora:document.getElementById('act-h').value,doc:docStr,sede:document.getElementById('act-s').value.trim()||'',notas:document.getElementById('act-notas').value.trim(),color:col,_nuevo:true};
+    var cidAct=parseInt(document.getElementById('act-curso-rel').value)||null;
+    var cnAct=(function(){if(!cidAct)return '';var c=DB.cursos.find(function(x){return x.id===cidAct;});return c?c.nombre:''})();
+    var nuevaAct={id:DB.nextActId++,titulo:t,fecha:document.getElementById('act-f').value,hora:document.getElementById('act-h').value,doc:docStr,sede:document.getElementById('act-s').value.trim()||'',notas:document.getElementById('act-notas').value.trim(),color:col,curso_id:cidAct,curso_nombre:cnAct,_nuevo:true};
     DB.agenda.push(nuevaAct);
     dbGuardarActividad(nuevaAct);
   }
@@ -1867,9 +1881,10 @@ function guardarAct(){
   document.getElementById('btn-del-act').style.display='none';
   actDocsSel=[];
   ['act-t','act-f','act-h','act-s','act-notas'].forEach(function(i){document.getElementById(i).value=''});
+  var acr=document.getElementById('act-curso-rel');if(acr)acr.value='';
   closeM('m-act');renderAgendaLista();renderCal();renderResumen();
 }
-function selCol(el){document.querySelectorAll('.col-o').forEach(function(o){o.style.border='3px solid transparent'});el.style.border='3px solid '+el.dataset.col}
+function selCol(el){document.querySelectorAll('.col-o').forEach(function(o){o.style.outline='none';});el.style.outline='3px solid '+el.dataset.col;el.style.outlineOffset='2px';}
 
 // CALENDARIO
 function renderCal(){
@@ -3676,6 +3691,14 @@ function resetImpG(){
 }
 
 // ===== NUEVO DOCENTE DESDE MODAL ACTIVIDAD =====
+function poblarCursosActModal(selId){
+  var sel=document.getElementById('act-curso-rel');if(!sel)return;
+  sel.innerHTML='<option value="">— Sin curso asociado —</option>';
+  DB.cursos.forEach(function(c){
+    sel.innerHTML+='<option value="'+c.id+'"'+(selId&&parseInt(selId)===c.id?' selected':'')+'>'+c.nombre+'</option>';
+  });
+}
+
 function toggleNuevoDocAct(){
   var form=document.getElementById('nuevo-doc-act-form');
   if(!form)return;
