@@ -1828,6 +1828,7 @@ function abrirModalActLimpio(){
   cols.forEach(function(c){c.style.outline='none';});
   if(cols.length){cols[0].style.outline='3px solid '+cols[0].dataset.col;cols[0].style.outlineOffset='2px';}
   buildDocList();renderDocsSel();
+  poblarCursosActModal();
   openM('m-act');
 }
 // EDITAR ACTIVIDAD
