@@ -2144,7 +2144,7 @@ function guardarCurso(){
   var n=document.getElementById('nc-n').value.trim();if(!n)return;
   var nuevo={id:DB.nextId++,nombre:n,dest:document.getElementById('nc-d').value.trim()||'—',carga:document.getElementById('nc-c').value.trim()||'—',ambito:document.getElementById('nc-a').value.trim()||'—',tipoCurso:document.getElementById('nc-tipo').value,tipo:document.getElementById('nc-t').value,estado:document.getElementById('nc-e').value,finicio:document.getElementById('nc-finicio').value,ffin:document.getElementById('nc-ffin').value,clases:[],alumnos:[],ediciones:[],_nuevo:true};
   DB.cursos.push(nuevo);
-  dbGuardarCurso(nuevo);
+  dbGuardarCurso(nuevo).then(function(){recargarDatos();});
   closeM('m-nc');['nc-n','nc-d','nc-c','nc-a','nc-finicio','nc-ffin'].forEach(function(i){document.getElementById(i).value=''});
   renderCursosExp();buildChips();updateBdg();
 }
@@ -3546,7 +3546,7 @@ function actualizarPreviewImp(){
   document.getElementById('btn-imp-confirmar').style.display=nNuevos>0?'inline-flex':'none';
 }
 
-function procesarImpG(){
+async function procesarImpG(){
   // Leer mapeo actual
   var parsed=impDatosRaw.map(function(row){
     var obj={};
@@ -3563,11 +3563,13 @@ function procesarImpG(){
   var estado=document.getElementById('alg-imp-estado').value;
 
   var destArr=null;
+  var c=null;
+  var ed=null;
   if(cid){
-    var c=DB.cursos.find(function(x){return x.id===cid;});
+    c=DB.cursos.find(function(x){return x.id===cid;});
     if(c){
       if(eid){
-        var ed=c.ediciones.find(function(x){return x.id===eid;});
+        ed=c.ediciones.find(function(x){return x.id===eid;});
         if(ed){if(!ed.alumnos)ed.alumnos=[];destArr=ed.alumnos;}
       } else {destArr=c.alumnos;}
     }
@@ -3576,7 +3578,14 @@ function procesarImpG(){
   var importados=0,duplicados=0,yaEnDest=0;
   var todosEx=getAllAlumnos();
 
-  parsed.forEach(function(al){
+  // Mostrar progreso
+  var res=document.getElementById('alg-imp-resultado');
+  res.style.display='block';
+  res.style.cssText='display:block;margin-top:10px;padding:10px 12px;border-radius:7px;font-size:13px;background:var(--azul-bg);border:1px solid #a0bcd8;color:var(--azul)';
+  res.innerHTML='⏳ Guardando alumnos en la base de datos...';
+
+  for(var i=0;i<parsed.length;i++){
+    var al=parsed[i];
     var esDup=al.dni
       ?todosEx.some(function(x){return x.al.dni&&x.al.dni===al.dni;})
       :(al.apellido&&al.nombre&&todosEx.some(function(x){
@@ -3597,24 +3606,29 @@ function procesarImpG(){
               :(x.al.apellido||'').toLowerCase()===(al.apellido||'').toLowerCase()
                &&(x.al.nombre||'').toLowerCase()===(al.nombre||'').toLowerCase();
           });
-          var copia=Object.assign({},orig?orig.al:al,{id:nid(destArr),estado:estado});
+          var copia=Object.assign({},orig?orig.al:al,{id:nid(destArr),estado:estado,_nuevo:true});
           destArr.push(copia);
+          await dbGuardarAlumno(copia,cid,eid||null);
           importados++;
         } else {yaEnDest++;}
       } else {duplicados++;}
-      return;
+      continue;
     }
 
     var nuevoAl=Object.assign({},al,{id:0,estado:estado,_nuevo:true});
     if(destArr){
-      nuevoAl.id=nid(destArr);destArr.push(nuevoAl);
-      // Guardar en Supabase
-      var cIdImp=parseInt(document.getElementById('alg-imp-curso').value)||null;
-      var eIdImp=parseInt(document.getElementById('alg-imp-edicion').value)||null;
-      dbGuardarAlumno(nuevoAl,cIdImp,eIdImp||null);
-    }else{if(!DB._pendientes)DB._pendientes=[];nuevoAl.id=nid(DB._pendientes);DB._pendientes.push(nuevoAl);}
+      nuevoAl.id=nid(destArr);
+      destArr.push(nuevoAl);
+      await dbGuardarAlumno(nuevoAl,cid,eid||null);
+    } else {
+      if(!DB._pendientes)DB._pendientes=[];
+      nuevoAl.id=nid(DB._pendientes);
+      DB._pendientes.push(nuevoAl);
+    }
     importados++;
-  });
+    // Actualizar progreso
+    res.innerHTML='⏳ Guardando... '+importados+' de '+parsed.length+' alumnos';
+  }
 
   var res=document.getElementById('alg-imp-resultado');
   res.style.display='block';
@@ -3632,6 +3646,8 @@ function procesarImpG(){
   res.style.cssText='display:block;margin-top:10px;padding:10px 12px;border-radius:7px;font-size:13px;background:'+color+';border:1px solid '+border+';color:'+tc;
   res.innerHTML=msg;
   document.getElementById('btn-imp-confirmar').style.display='none';
+  // Recargar desde Supabase para mostrar los datos reales guardados
+  await recargarDatos();
   renderAlumnosGlobal();updateBdg();
 }
 
@@ -3996,13 +4012,17 @@ function mapAlumno(a){
 async function dbGuardarCurso(c){
   var body={nombre:c.nombre,dest:c.dest,carga:c.carga,ambito:c.ambito,
     tipo_curso:c.tipoCurso,tipo:c.tipo,estado:c.estado,finicio:c.finicio||null,ffin:c.ffin||null};
-  if(c._nuevo){
-    var res=await supaPost('cursos',body);
-    if(res&&res[0])c.id=res[0].id;
-  } else {
-    await supaPatch('cursos','id=eq.'+c.id,body);
-  }
-  setSyncStatus('ok');
+  try{
+    if(c._nuevo){
+      var res=await supaPost('cursos',body);
+      if(res&&res[0])c.id=res[0].id;
+      delete c._nuevo;
+    } else {
+      await supaPatch('cursos','id=eq.'+c.id,body);
+    }
+    setSyncStatus('ok');
+    return true;
+  }catch(e){setSyncStatus('error');return false;}
 }
 async function dbEliminarCurso(id){
   await supaDelete('cursos','id=eq.'+id);setSyncStatus('ok');
@@ -4012,13 +4032,17 @@ async function dbEliminarCurso(id){
 async function dbGuardarDocente(d){
   var body={apellido:d.apellido,nombre:d.nombre,rol:d.rol,mat:d.mat,
     dni:d.dni||null,esp:d.esp,tel:d.tel,mail:d.mail,cel:d.cel||'',dias:d.dias};
-  if(d._nuevo){
-    var res=await supaPost('docentes',body);
-    if(res&&res[0])d.id=res[0].id;
-  } else {
-    await supaPatch('docentes','id=eq.'+d.id,body);
-  }
-  setSyncStatus('ok');
+  try{
+    if(d._nuevo){
+      var res=await supaPost('docentes',body);
+      if(res&&res[0])d.id=res[0].id;
+      delete d._nuevo;
+    } else {
+      await supaPatch('docentes','id=eq.'+d.id,body);
+    }
+    setSyncStatus('ok');
+    return true;
+  }catch(e){setSyncStatus('error');return false;}
 }
 async function dbEliminarDocente(id){
   await supaDelete('docentes','id=eq.'+id);setSyncStatus('ok');
@@ -4029,13 +4053,21 @@ async function dbGuardarAlumno(a,cursoId,edicionId){
   var body={apellido:a.apellido,nombre:a.nombre,prof:a.prof,inst:a.inst,
     dni:a.dni||null,mail:a.mail||null,cel:a.cel||null,estado:a.estado,
     curso_id:cursoId,edicion_id:edicionId||null};
-  if(a._nuevo){
-    var res=await supaPost('alumnos',body);
-    if(res&&res[0])a.id=res[0].id;
-  } else {
-    await supaPatch('alumnos','id=eq.'+a.id,body);
+  try{
+    if(a._nuevo){
+      var res=await supaPost('alumnos',body);
+      if(res&&res[0])a.id=res[0].id;
+      delete a._nuevo;
+    } else {
+      await supaPatch('alumnos','id=eq.'+a.id,body);
+    }
+    setSyncStatus('ok');
+    return true;
+  }catch(e){
+    console.error('Error guardando alumno:',e);
+    setSyncStatus('error');
+    return false;
   }
-  setSyncStatus('ok');
 }
 async function dbEliminarAlumno(id){
   await supaDelete('alumnos','id=eq.'+id);setSyncStatus('ok');
@@ -4076,13 +4108,17 @@ async function dbEliminarEdicion(id){
 async function dbGuardarActividad(ev){
   var body={titulo:ev.titulo,fecha:ev.fecha||null,hora:ev.hora||null,
     doc:ev.doc,sede:ev.sede||null,notas:ev.notas||null,color:ev.color};
-  if(ev._nuevo){
-    var res=await supaPost('agenda',body);
-    if(res&&res[0])ev.id=res[0].id;
-  } else {
-    await supaPatch('agenda','id=eq.'+ev.id,body);
-  }
-  setSyncStatus('ok');
+  try{
+    if(ev._nuevo){
+      var res=await supaPost('agenda',body);
+      if(res&&res[0])ev.id=res[0].id;
+      delete ev._nuevo;
+    } else {
+      await supaPatch('agenda','id=eq.'+ev.id,body);
+    }
+    setSyncStatus('ok');
+    return true;
+  }catch(e){setSyncStatus('error');return false;}
 }
 async function dbEliminarActividad(id){
   await supaDelete('agenda','id=eq.'+id);setSyncStatus('ok');
