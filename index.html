@@ -1048,15 +1048,42 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
 <!-- Importar -->
 <div class="mov" id="m-imp"><div class="modal modal-lg">
   <h3 id="m-imp-t">Importar alumnos</h3>
-  <p style="font-size:13px;color:var(--texto2);margin-bottom:.875rem">Un alumno por línea: <code style="background:var(--gris-claro);padding:2px 5px;border-radius:4px;font-size:12px">Apellido, Nombre, Profesión, Institución, DNI, Email, Celular</code></p>
-  <div class="upload-area" onclick="document.getElementById('f-imp').click()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:26px;height:26px;margin:0 auto 5px;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-    Subir CSV o TXT
-    <input type="file" id="f-imp" style="display:none" accept=".csv,.txt" onchange="impArchivo(this)">
+  <!-- Zona de carga -->
+  <div id="imp-zona-carga">
+    <div class="upload-area" id="imp-dropzone"
+      onclick="document.getElementById('f-imp').click()"
+      ondragover="event.preventDefault();this.style.background='var(--azul-bg)'"
+      ondragleave="this.style.background=''"
+      ondrop="event.preventDefault();this.style.background='';leerArchivoImp({files:event.dataTransfer.files})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;margin:0 auto 7px;display:block;color:var(--azul)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div style="font-size:13px;font-weight:500;color:var(--texto)">Subir Excel, CSV o TXT</div>
+      <div style="font-size:11px;color:var(--texto2);margin-top:3px">Arrastrá o hacé clic · .xlsx · .xls · .csv · .txt</div>
+      <input type="file" id="f-imp" style="display:none" accept=".xlsx,.xls,.csv,.txt" onchange="leerArchivoImp(this)">
+    </div>
+    <div style="background:var(--gris-claro);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--texto2)">
+      <strong style="color:var(--texto)">Encabezados detectados automáticamente.</strong>
+      Reconoce: apellido, nombre, profesion, institucion, dni, email, celular (y variantes en inglés)
+    </div>
   </div>
-  <p style="font-size:12px;color:var(--texto2);text-align:center;margin-bottom:7px">— o pegá el texto —</p>
-  <textarea id="imp-txt" style="height:100px;font-family:monospace;font-size:12px" placeholder="García, Juan, Médico, GCBA, 28345678"></textarea>
-  <div class="mfooter"><button class="btn" onclick="closeM('m-imp')">Cancelar</button><button class="btn btn-pri" onclick="procImp()">Importar</button></div>
+  <!-- Mapeo de columnas -->
+  <div id="imp-mapeo" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--borde)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+      <div style="font-size:12px;font-weight:600" id="imp-archivo-nombre"></div>
+      <button class="btn btn-sm btn-dng" onclick="resetImp()">✕ Otro archivo</button>
+    </div>
+    <div id="imp-mapeo-cols" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:9px"></div>
+  </div>
+  <!-- Preview -->
+  <div id="imp-preview" style="display:none;margin-top:.875rem">
+    <div style="font-size:12px;font-weight:600;color:var(--texto2);margin-bottom:6px">Vista previa · <span id="imp-preview-res"></span></div>
+    <div id="imp-preview-cont" style="max-height:180px;overflow-y:auto;border:1px solid var(--borde);border-radius:6px;background:var(--gris-claro);font-size:12px"></div>
+  </div>
+  <!-- Estado / resultado -->
+  <div id="imp-resultado" style="display:none;margin-top:9px;padding:9px 12px;border-radius:7px;font-size:13px"></div>
+  <div class="mfooter">
+    <button class="btn" onclick="closeM('m-imp');resetImp()">Cancelar</button>
+    <button class="btn btn-pri" id="btn-imp-curso" onclick="procImpCurso()" style="display:none">Importar alumnos</button>
+  </div>
 </div></div>
 
 <!-- Edición -->
@@ -2263,17 +2290,179 @@ function delAl(aid){
   else{c.alumnos=c.alumnos.filter(function(x){return x.id!==aid});renderAlCurso(c)}
   updSelCnt();updateBdg();
 }
-function procImp(){
-  var txt=document.getElementById('imp-txt').value.trim();if(!txt)return;
-  var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
-  var dest,refresh;
-  if(DB.edicionActual!=null){var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(!ed)return;if(!ed.alumnos)ed.alumnos=[];dest=ed.alumnos;refresh=function(){renderAlEd(ed)}}
-  else{dest=c.alumnos;refresh=function(){renderAlCurso(c)}}
-  var nxtId=nid(dest);
-  txt.split('\n').forEach(function(l){var p=l.split(',').map(function(x){return x.trim()});if(p[0]||p[1])dest.push({id:nxtId++,apellido:p[0]||'—',nombre:p[1]||'—',prof:p[2]||'—',inst:p[3]||'—',dni:p[4]||'',mail:p[5]||'',cel:p[6]||'',estado:'Inscripto'})});
-  document.getElementById('imp-txt').value='';closeM('m-imp');refresh();updateBdg();
+// ===== IMPORTAR EN CURSO (usa mismo motor que global) =====
+var impCursoDatosRaw=[];
+var impCursoMapeo={};
+
+function leerArchivoImp(inp){
+  var files=inp.files||inp;
+  var f=files[0];if(!f)return;
+  var nombre=f.name;
+  var ext=nombre.split('.').pop().toLowerCase();
+  document.getElementById('imp-archivo-nombre').textContent=nombre;
+  var res=document.getElementById('imp-resultado');
+  res.style.display='block';
+  res.style.cssText='display:block;margin-top:9px;padding:9px 12px;border-radius:7px;font-size:13px;background:var(--azul-bg);border:1px solid #a0bcd8;color:var(--azul)';
+  res.innerHTML='⏳ Leyendo <strong>'+nombre+'</strong>...';
+  if(ext==='xlsx'||ext==='xls'){
+    cargarSheetJS(function(){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        try{
+          var data=new Uint8Array(e.target.result);
+          var wb=XLSX.read(data,{type:'uint8array'});
+          var ws=wb.Sheets[wb.SheetNames[0]];
+          var json=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+          procesarDatosImpCurso(json,nombre);
+        }catch(err){mostrarErrImp('Error al leer Excel: '+err.message);}
+      };
+      reader.readAsArrayBuffer(f);
+    });
+  } else {
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var json=parsearCSV(e.target.result.trim());
+      procesarDatosImpCurso(json,nombre);
+    };
+    reader.readAsText(f,'UTF-8');
+  }
 }
-function impArchivo(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){document.getElementById('imp-txt').value=e.target.result};r.readAsText(f)}
+
+function procesarDatosImpCurso(json,nombre){
+  if(!json.length){mostrarErrImp('El archivo está vacío o no se pudo leer.');return;}
+  impCursoDatosRaw=json;
+  impCursoMapeo={};
+  Object.keys(json[0]).forEach(function(h){
+    var campo=detectarCampo(h);
+    if(campo&&!impCursoMapeo[campo])impCursoMapeo[campo]=h;
+  });
+  document.getElementById('imp-zona-carga').style.display='none';
+  document.getElementById('imp-mapeo').style.display='block';
+  // Renderizar selectores
+  var cont=document.getElementById('imp-mapeo-cols');cont.innerHTML='';
+  var labels={apellido:'Apellido',nombre:'Nombre',prof:'Profesión',inst:'Institución',dni:'DNI',mail:'Email',cel:'Celular'};
+  Object.keys(labels).forEach(function(campo){
+    var cols=Object.keys(json[0]);
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;flex-direction:column;gap:3px';
+    var lbl=document.createElement('label');lbl.className='flbl';lbl.textContent=labels[campo];
+    var sel=document.createElement('select');sel.id='imap-'+campo;sel.style.fontSize='12px';
+    sel.innerHTML='<option value="">— No incluir —</option>';
+    cols.forEach(function(h){sel.innerHTML+='<option value="'+h+'"'+(impCursoMapeo[campo]===h?' selected':'')+'>'+h+'</option>';});
+    sel.onchange=function(){impCursoMapeo[campo]=this.value||null;actualizarPreviewImpCurso();};
+    div.appendChild(lbl);div.appendChild(sel);
+    cont.appendChild(div);
+  });
+  actualizarPreviewImpCurso();
+}
+
+function actualizarPreviewImpCurso(){
+  var camposLabels={apellido:1,nombre:1,prof:1,inst:1,dni:1,mail:1,cel:1};
+  Object.keys(camposLabels).forEach(function(c){
+    var sel=document.getElementById('imap-'+c);
+    if(sel)impCursoMapeo[c]=sel.value||null;
+  });
+  var parsed=impCursoDatosRaw.map(function(row){
+    var obj={};
+    Object.keys(impCursoMapeo).forEach(function(campo){
+      var col=impCursoMapeo[campo];
+      obj[campo]=col&&row[col]?row[col].toString().trim():'';
+    });
+    return obj;
+  }).filter(function(o){return o.apellido||o.nombre;});
+  var prev=document.getElementById('imp-preview');
+  var cont=document.getElementById('imp-preview-cont');
+  prev.style.display='block';cont.innerHTML='';
+  var todosEx=getAllAlumnos();var ndups=0;
+  parsed.forEach(function(al,i){
+    var dup=al.dni
+      ?todosEx.some(function(x){return x.al.dni&&x.al.dni===al.dni;})
+      :(al.apellido&&al.nombre&&todosEx.some(function(x){
+          return (x.al.apellido||'').toLowerCase()===(al.apellido||'').toLowerCase()
+            &&(x.al.nombre||'').toLowerCase()===(al.nombre||'').toLowerCase();}));
+    if(dup)ndups++;
+    var fila=document.createElement('div');
+    fila.style.cssText='display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:4px;margin-bottom:2px;'+(dup?'background:#fdf0e0':'background:#fff;border-bottom:1px solid var(--borde)');
+    fila.innerHTML=(dup?'<span style="color:var(--naranja);font-size:13px">⚠</span>':'<span style="color:var(--verde);font-size:13px">✓</span>')
+      +'<span style="font-weight:500;min-width:120px">'+(al.apellido||'—')+', '+(al.nombre||'—')+'</span>'
+      +'<span style="color:var(--texto2);font-size:11px;flex:1">'+(al.prof||'')+' '+(al.inst?'· '+al.inst:'')+(al.dni?' · DNI: '+al.dni:'')+'</span>'
+      +(dup?'<span class="pill p-pend">Ya existe</span>':'');
+    cont.appendChild(fila);
+  });
+  var nNuevos=parsed.length-ndups;
+  var resumen=parsed.length+' registros &nbsp;·&nbsp; <strong style="color:var(--verde)">'+nNuevos+' nuevos</strong>';
+  if(ndups)resumen+=' &nbsp;·&nbsp; <strong style="color:var(--naranja)">'+ndups+' ya existen</strong>';
+  document.getElementById('imp-preview-res').innerHTML=resumen;
+  var footer=document.createElement('div');
+  footer.style.cssText='padding:6px 8px;border-top:1px solid var(--borde);font-size:12px;color:var(--texto2);background:#fff';
+  footer.innerHTML=resumen;
+  cont.appendChild(footer);
+  var res=document.getElementById('imp-resultado');res.style.display='none';
+  document.getElementById('btn-imp-curso').style.display=nNuevos>0?'inline-flex':'none';
+}
+
+function mostrarErrImp(msg){
+  var res=document.getElementById('imp-resultado');
+  res.style.display='block';
+  res.style.cssText='display:block;margin-top:9px;padding:9px 12px;border-radius:7px;font-size:13px;background:var(--naranja-bg);border:1px solid #e5c99a;color:var(--naranja)';
+  res.innerHTML='⚠ '+msg;
+}
+
+async function procImpCurso(){
+  var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
+  var parsed=impCursoDatosRaw.map(function(row){
+    var obj={};
+    ['apellido','nombre','prof','inst','dni','mail','cel'].forEach(function(campo){
+      var sel=document.getElementById('imap-'+campo);
+      var col=sel?sel.value:'';
+      obj[campo]=col&&row[col]?row[col].toString().trim():'';
+    });
+    return obj;
+  }).filter(function(o){return o.apellido||o.nombre;});
+  var destArr;var cid=c.id;var eid=null;
+  if(DB.edicionActual!=null){
+    var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});
+    if(!ed)return;if(!ed.alumnos)ed.alumnos=[];destArr=ed.alumnos;eid=ed.id;
+  } else {destArr=c.alumnos;}
+  var todosEx=getAllAlumnos();var importados=0;var dups=0;
+  var res=document.getElementById('imp-resultado');
+  res.style.display='block';
+  res.style.cssText='display:block;margin-top:9px;padding:9px 12px;border-radius:7px;font-size:13px;background:var(--azul-bg);border:1px solid #a0bcd8;color:var(--azul)';
+  res.innerHTML='⏳ Guardando...';
+  for(var i=0;i<parsed.length;i++){
+    var al=parsed[i];
+    var esDup=al.dni
+      ?todosEx.some(function(x){return x.al.dni&&x.al.dni===al.dni;})
+      :(al.apellido&&al.nombre&&todosEx.some(function(x){
+          return (x.al.apellido||'').toLowerCase()===(al.apellido||'').toLowerCase()
+            &&(x.al.nombre||'').toLowerCase()===(al.nombre||'').toLowerCase();}));
+    if(esDup){dups++;continue;}
+    var nuevoAl=Object.assign({},al,{id:nid(destArr),estado:'Inscripto',_nuevo:true});
+    destArr.push(nuevoAl);
+    await dbGuardarAlumno(nuevoAl,cid,eid);
+    importados++;
+    res.innerHTML='⏳ Guardando... '+importados+' de '+(parsed.length-dups)+' alumnos';
+  }
+  var color=importados>0?'var(--verde-bg)':'var(--naranja-bg)';
+  var border=importados>0?'#a8d8b8':'#e5c99a';
+  var tc=importados>0?'var(--verde)':'var(--naranja)';
+  res.style.cssText='display:block;margin-top:9px;padding:9px 12px;border-radius:7px;font-size:13px;background:'+color+';border:1px solid '+border+';color:'+tc;
+  res.innerHTML=(importados>0?'✓ ':'⚠ ')+'<strong>'+importados+'</strong> alumno'+(importados===1?'':'s')+' importado'+(importados===1?'':'s')+(dups?' &nbsp;·&nbsp; '+dups+' ya existían':'');
+  document.getElementById('btn-imp-curso').style.display='none';
+  if(DB.edicionActual!=null){var edr=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(edr)renderAlEd(edr);}
+  else renderAlCurso(c);
+  recargarDatos();updateBdg();
+}
+
+function resetImp(){
+  impCursoDatosRaw=[];impCursoMapeo={};
+  document.getElementById('imp-zona-carga').style.display='block';
+  document.getElementById('imp-mapeo').style.display='none';
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-resultado').style.display='none';
+  document.getElementById('btn-imp-curso').style.display='none';
+  var fi=document.getElementById('f-imp');if(fi)fi.value='';
+}
 function guardarEd(){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
   var n=document.getElementById('ed-n').value.trim();if(!n)return;
