@@ -1870,14 +1870,14 @@ function guardarAct(){
     ev.notas=document.getElementById('act-notas').value.trim();ev.color=col;
     ev.curso_id=parseInt(document.getElementById('act-curso-rel').value)||null;
     ev.curso_nombre=(function(){var cid=ev.curso_id;if(!cid)return '';var c=DB.cursos.find(function(x){return x.id===cid;});return c?c.nombre:'';})();
-    dbGuardarActividad(ev);
+    dbGuardarActividad(ev).then(function(){recargarDatos();});
     actEditId=null;
   } else {
     var cidAct=parseInt(document.getElementById('act-curso-rel').value)||null;
     var cnAct=(function(){if(!cidAct)return '';var c=DB.cursos.find(function(x){return x.id===cidAct;});return c?c.nombre:''})();
     var nuevaAct={id:DB.nextActId++,titulo:t,fecha:document.getElementById('act-f').value,hora:document.getElementById('act-h').value,doc:docStr,sede:document.getElementById('act-s').value.trim()||'',notas:document.getElementById('act-notas').value.trim(),color:col,curso_id:cidAct,curso_nombre:cnAct,_nuevo:true};
     DB.agenda.push(nuevaAct);
-    dbGuardarActividad(nuevaAct);
+    dbGuardarActividad(nuevaAct).then(function(){recargarDatos();});
   }
   document.getElementById('m-act-t').textContent='Nueva actividad';
   document.getElementById('btn-del-act').style.display='none';
@@ -2069,19 +2069,23 @@ function guardarDoc(){
   var obj={apellido:ap,nombre:nm,rol:document.getElementById('doc-rol').value.trim()||'—',mat:mat,dni:document.getElementById('doc-dni').value.trim(),esp:document.getElementById('doc-esp').value.trim(),tel:document.getElementById('doc-tel').value.trim(),mail:document.getElementById('doc-mail').value.trim(),dias:dias};
   if(docEditId!=null){
     var d=DB.docentes.find(function(x){return x.id===docEditId});
-    if(d){d.apellido=obj.apellido;d.nombre=obj.nombre;d.rol=obj.rol;d.mat=obj.mat;d.esp=obj.esp;d.tel=obj.tel;d.mail=obj.mail;d.dias=obj.dias;}
+    if(d){
+      d.apellido=obj.apellido;d.nombre=obj.nombre;d.rol=obj.rol;
+      d.mat=obj.mat;d.dni=obj.dni||d.dni||'';
+      d.esp=obj.esp;d.tel=obj.tel;d.mail=obj.mail;d.dias=obj.dias;
+      dbGuardarDocente(d).then(function(){recargarDatos();});
+    }
     var idParaVolver=docEditId;
     docEditId=null;
     closeM('mdoc');
     ['doc-ap','doc-nm','doc-rol','doc-mat','doc-mat2','doc-dni','doc-esp','doc-tel','doc-mail'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});
     document.querySelectorAll('#dias-sel .dia-tag').forEach(function(t){t.classList.remove('on')});
     renderDoc();updateBdg();
-    // si el detalle está visible, recargarlo
     var dd=document.getElementById('doc-det');
     if(dd&&dd.style.display!=='none')abrirDoc(idParaVolver);
   } else {
     obj.id=nid(DB.docentes);obj._nuevo=true;DB.docentes.push(obj);
-    dbGuardarDocente(obj);
+    dbGuardarDocente(obj).then(function(){recargarDatos();});
     docEditId=null;
     closeM('mdoc');
     ['doc-ap','doc-nm','doc-rol','doc-mat','doc-mat2','doc-dni','doc-esp','doc-tel','doc-mail'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});
@@ -2196,7 +2200,7 @@ function guardarClase(){
   var docStr=clDocsSel.length?clDocsSel.join(' / '):'—';
   var nuevaCl={id:nid(c.clases),titulo:t,fecha:document.getElementById('cl-f').value,docente:docStr,dur:document.getElementById('cl-d').value.trim()||'—',modal:document.getElementById('cl-m').value,_nuevo:true};
   c.clases.push(nuevaCl);
-  dbGuardarClase(nuevaCl,c.id);
+  dbGuardarClase(nuevaCl,c.id).then(function(){recargarDatos();});
   clDocsSel=[];closeM('m-cl');['cl-t','cl-f','cl-d'].forEach(function(i){document.getElementById(i).value=''});
   var qd=document.getElementById('q-doc-cl');if(qd)qd.value='';
   document.getElementById('cl-doc-sel').innerHTML='';
@@ -2236,8 +2240,14 @@ function guardarAl(){
   };
   if(DB.edicionActual!=null){
     var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(!ed)return;
-    if(!ed.alumnos)ed.alumnos=[];al.id=nid(ed.alumnos);ed.alumnos.push(al);renderAlEd(ed);
-  } else {al.id=nid(c.alumnos);c.alumnos.push(al);renderAlCurso(c);}
+    if(!ed.alumnos)ed.alumnos=[];al.id=nid(ed.alumnos);al._nuevo=true;ed.alumnos.push(al);
+    dbGuardarAlumno(al,c.id,ed.id).then(function(){recargarDatos();});
+    renderAlEd(ed);
+  } else {
+    al.id=nid(c.alumnos);al._nuevo=true;c.alumnos.push(al);
+    dbGuardarAlumno(al,c.id,null).then(function(){recargarDatos();});
+    renderAlCurso(c);
+  }
   // Limpiar
   closeM('m-al');
   ['al-ap','al-nm','al-pr','al-in','al-dn','al-mail','al-cel'].forEach(function(i){var el=document.getElementById(i);if(el)el.value='';});
@@ -2712,7 +2722,7 @@ function guardarEdicionAlumnoG(){
   a.mail=document.getElementById('alg-e-mail').value.trim();
   a.cel=document.getElementById('alg-e-cel').value.trim();
   a.estado=document.getElementById('alg-e-es').value;
-  dbGuardarAlumno(a,algActual.cursoId,algActual.edicionId||null);
+  dbGuardarAlumno(a,algActual.cursoId,algActual.edicionId||null).then(function(){recargarDatos();});
   closeM('m-alg-editar');
   abrirAlumnoG(algActual.cursoId,algActual.edicionId,algActual.alumnoId);
   updateBdg();
