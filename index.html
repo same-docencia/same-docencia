@@ -1623,6 +1623,7 @@ function abrirCurso(id){
   document.getElementById('det-pills').innerHTML='<span class="pill '+ep(c.estado)+'">'+c.estado+'</span><span class="pill p-cur">'+(c.tipoCurso||'Curso')+'</span><span class="pill p-cur">'+c.tipo+'</span>';
   document.getElementById('m-al-t').textContent='Agregar alumno';
   document.getElementById('m-imp-t').textContent='Importar alumnos';
+  resetImp();
   document.getElementById('q-al').value='';
   document.getElementById('sel-all').checked=false;updSelCnt();
   showTab('tc',document.querySelector('.tab'));
@@ -1644,10 +1645,11 @@ function abrirEdAl(cid,eid){
   document.getElementById('det-m').textContent=ed.num+' · '+fmt(ed.inicio)+' → '+fmt(ed.fin);
   document.getElementById('det-pills').innerHTML='<span class="pill '+ep(c.estado)+'">'+c.estado+'</span><span class="pill '+ep(ed.estado)+'">'+ed.estado+'</span>';
   document.getElementById('m-al-t').textContent='Agregar alumno · '+ed.num;
-  document.getElementById('m-imp-t').textContent='Importar · '+ed.num;
+  document.getElementById('m-imp-t').textContent='Importar alumnos · '+ed.num;
   document.getElementById('al-sin-ed').style.display='block';
   document.getElementById('al-con-ed').style.display='none';
   showTab('ta',document.querySelectorAll('.tab')[1]);
+  resetImp(); // limpiar el modal de importar
   renderAlEd(ed);renderClasesCurso(c);renderEdDet(c);
 }
 function volverCursos(){
@@ -1680,6 +1682,10 @@ function renderAlCurso(c,q){
 function renderAlEd(ed){
   if(!ed.alumnos)ed.alumnos=[];
   var tb=document.getElementById('t-al');tb.innerHTML='';
+  if(!ed.alumnos.length){
+    tb.innerHTML='<tr class="empty-r"><td colspan="8">Sin alumnos en esta edición</td></tr>';
+    updSelCnt();return;
+  }
   renderAlTabla(tb,ed.alumnos);
 }
 function renderAlTabla(tb,lista){
@@ -1711,7 +1717,13 @@ function renderEdDet(c){
   c.ediciones.forEach(function(ed){
     if(!ed.alumnos)ed.alumnos=[];
     var b=document.createElement('div');b.className='card';
-    b.innerHTML='<div class="card-hdr"><div><span class="card-ttl">'+ed.num+'</span><span class="pill '+ep(ed.estado)+'" style="margin-left:8px">'+ed.estado+'</span></div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:12px;color:var(--texto2)">'+fmt(ed.inicio)+' → '+fmt(ed.fin)+'</span><button class="btn btn-sm" onclick="abrirEdAl('+c.id+','+ed.id+')">Ver alumnos ('+ed.alumnos.length+')</button><button class="btn btn-sm btn-dng" onclick="delEd('+ed.id+')">✕</button></div></div>';
+    b.innerHTML='<div class="card-hdr" style="flex-wrap:wrap;gap:8px">'
+      +'<div><span class="card-ttl">'+ed.num+'</span><span class="pill '+ep(ed.estado)+'" style="margin-left:8px">'+ed.estado+'</span><span style="font-size:12px;color:var(--texto2);margin-left:10px">'+fmt(ed.inicio)+' → '+fmt(ed.fin)+'</span></div>'
+      +'<div style="display:flex;gap:5px;align-items:center">'
+      +'<button class="btn btn-sm btn-pri" onclick="abrirEdAl('+c.id+','+ed.id+')">👥 Ver / cargar alumnos ('+ed.alumnos.length+')</button>'
+      +'<button class="btn btn-sm" onclick="abrirImpEdicion('+c.id+','+ed.id+')" style="background:var(--verde-bg);color:var(--verde);border-color:#a8d8b8">⬆ Importar Excel</button>'
+      +'<button class="btn btn-sm btn-dng" onclick="delEd('+ed.id+')">✕</button>'
+      +'</div></div>';
     cont.appendChild(b);
   });
 }
@@ -2452,6 +2464,15 @@ async function procImpCurso(){
   if(DB.edicionActual!=null){var edr=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(edr)renderAlEd(edr);}
   else renderAlCurso(c);
   recargarDatos();updateBdg();
+}
+
+function abrirImpEdicion(cid,eid){
+  DB.cursoActual=cid;DB.edicionActual=eid;
+  var c=DB.cursos.find(function(x){return x.id===cid});if(!c)return;
+  var ed=c.ediciones.find(function(x){return x.id===eid});if(!ed)return;
+  document.getElementById('m-imp-t').textContent='Importar alumnos · '+ed.num;
+  resetImp();
+  openM('m-imp');
 }
 
 function resetImp(){
