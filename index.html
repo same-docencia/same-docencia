@@ -1927,7 +1927,8 @@ function mostrarEvsCal(dateStr){
   if(!evs.length){cont.innerHTML='<div style="color:var(--texto2);font-style:italic;font-size:13px">Sin actividades este día</div><div style="margin-top:1rem"><button class="btn btn-sm btn-pri" onclick="abrirNuevaActFecha(\''+dateStr+'\')">+ Agregar actividad</button></div>';return}
   evs.forEach(function(ev){
     var e=document.createElement('div');e.className='ag-ev';
-    e.innerHTML='<div class="ag-stripe" style="background:'+ev.color+'"></div><div style="flex:1"><div class="ag-ttl">'+ev.titulo+'</div><div class="ag-det">'+(ev.hora?ev.hora+' · ':'')+ev.doc+(ev.sede?' · '+ev.sede:'')+(ev.notas?'<br><span style="font-style:italic">'+ev.notas+'</span>':'')+'</div></div><div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sm" onclick="enviarMailAct('+ev.id+')" title="Notificar" style="background:#e8f0f8;color:#1a3a5c;border-color:#a0bcd8">✉</button><button class="btn btn-sm" onclick="editAct('+ev.id+')" style="flex-shrink:0">✏</button></div>';
+    var ctag2=ev.curso_nombre?'<span style="font-size:11px;background:var(--azul-bg);color:var(--azul);padding:2px 8px;border-radius:20px;font-weight:500;margin-left:7px;white-space:nowrap">'+ev.curso_nombre+'</span>':'';
+    e.innerHTML='<div class="ag-stripe" style="background:'+ev.color+'"></div><div style="flex:1"><div class="ag-ttl" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+ev.titulo+ctag2+'</div><div class="ag-det">'+(ev.hora?ev.hora+' · ':'')+ev.doc+(ev.sede?' · '+ev.sede:'')+(ev.notas?'<br><span style="font-style:italic">'+ev.notas+'</span>':'')+'</div></div><div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sm" onclick="enviarMailAct('+ev.id+')" title="Notificar" style="background:#e8f0f8;color:#1a3a5c;border-color:#a0bcd8">✉</button><button class="btn btn-sm" onclick="editAct('+ev.id+')" style="flex-shrink:0">✏</button></div>';
     e.onclick=function(ev2){if(ev2.target.tagName!=='BUTTON')editAct(ev.id)};
     cont.appendChild(e);
   });
@@ -3863,7 +3864,9 @@ function setSyncStatus(estado){
   var btn=document.getElementById('btn-sync');
   var txt=document.getElementById('sync-txt');
   if(!txt)return;
-  var textos={sincronizando:'Actualizando…',ok:'Sincronizado',error:'Sin conexión',offline:'Local'};
+  var ahora=new Date();
+  var hora=ahora.getHours().toString().padStart(2,'0')+':'+ahora.getMinutes().toString().padStart(2,'0')+':'+ahora.getSeconds().toString().padStart(2,'0');
+  var textos={sincronizando:'Actualizando…',ok:'✓ '+hora,error:'⚠ Sin conexión',offline:'Local'};
   txt.textContent=textos[estado]||estado;
   if(btn){
     if(estado==='sincronizando'){btn.classList.add('sincronizando');btn.style.opacity='1';}
@@ -3941,13 +3944,18 @@ function rerenderPaginaActiva(){
 }
 
 function iniciarAutoRefresh(){
-  // Cada 30 segundos actualiza en segundo plano
   if(autoRefreshInterval)clearInterval(autoRefreshInterval);
+  // Poll cada 20 segundos
   autoRefreshInterval=setInterval(function(){
-    if(usuarioActual){
-      recargarDatos();
-    }
-  },30000);
+    if(!usuarioActual)return;
+    // Llamar sin await — funciona igual con setInterval
+    cargarDesdeSupa().then(function(ok){
+      if(ok){
+        try{rerenderPaginaActiva();}catch(e){console.error('rerender error:',e);}
+        buildChips();updateBdg();
+      }
+    }).catch(function(e){console.error('autorefresh error:',e);});
+  },20000);
 }
 
 function detenerAutoRefresh(){
