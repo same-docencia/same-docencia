@@ -692,8 +692,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
   <div class="tabs">
     <div class="tab active" onclick="showAgendaTab('lista',this)">Lista</div>
     <div class="tab" onclick="showAgendaTab('cal',this)">Calendario</div>
+    <div class="tab" onclick="showAgendaTab('pasadas',this)">Actividades pasadas</div>
   </div>
   <div id="ag-lista" class="tp active"><div id="agenda-list"></div></div>
+  <div id="ag-pasadas" class="tp">
+    <div id="agenda-filtros-past-wrap" style="margin-bottom:1rem;padding:10px 14px;background:var(--gris-claro);border-radius:8px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="fg" style="margin:0;flex:1;min-width:130px"><label class="flbl">Desde</label><input type="date" id="filtro-desde" onchange="renderAgendaPasadas()"></div>
+        <div class="fg" style="margin:0;flex:1;min-width:130px"><label class="flbl">Hasta</label><input type="date" id="filtro-hasta" onchange="renderAgendaPasadas()"></div>
+        <button class="btn btn-sm" onclick="limpiarFiltrosPast()">Limpiar filtros</button>
+      </div>
+    </div>
+    <div id="agenda-pasadas-list"></div>
+  </div>
   <div id="ag-cal" class="tp">
     <div class="cal-wrap">
       <div>
@@ -1500,6 +1511,12 @@ var avb=['#e8f0f8','#e6f4ec','#eeebfa','#fdf0e0','#fde8ec'];
 function avi(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%5;return h}
 function avC(s){return avc[avi(s)]}function avB(s){return avb[avi(s)]}
 function ini(a,n){return((a||'').charAt(0)+(n||'').charAt(0)).toUpperCase()}
+function hoyISO(){var h=new Date();return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0');}
+function estadoEfectivo(c){
+  var hoy=hoyISO();
+  if(c.ffin&&c.ffin<hoy&&c.estado!=='Finalizado')return 'Finalizado';
+  return c.estado||'Activo';
+}
 function ep(e){var m={Activo:'p-act',Programado:'p-prog','En desarrollo':'p-pend',Finalizado:'p-fin','En curso':'p-act',Inscripto:'p-prog',Cursando:'p-act',Aprobado:'p-act',Egresado:'p-fin',Programada:'p-prog'};return m[e]||'p-prog'}
 function fmt(s){if(!s)return'—';var d=new Date(s+'T00:00');return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function nid(arr){return arr&&arr.length?Math.max.apply(null,arr.map(function(x){return x.id}))+1:1}
@@ -1538,8 +1555,9 @@ document.querySelectorAll('.mov').forEach(function(o){o.addEventListener('click'
 // RESUMEN
 function renderResumen(){
   var ag=document.getElementById('res-agenda');ag.innerHTML='';
-  var s=DB.agenda.slice().sort(function(a,b){return a.fecha.localeCompare(b.fecha)});
-  if(!s.length){ag.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--texto2);font-style:italic">Sin actividades</div>';return}
+  var hoy=new Date();var hoyStr=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+  var s=DB.agenda.filter(function(ev){return ev.fecha>=hoyStr}).sort(function(a,b){return a.fecha.localeCompare(b.fecha)});
+  if(!s.length){ag.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--texto2);font-style:italic">Sin próximas actividades</div>';return}
   s.slice(0,5).forEach(function(ev){
     var d=document.createElement('div');d.style.cssText='display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-bottom:1px solid var(--borde);cursor:pointer';
     var cTag=ev.curso_nombre?'<span style="font-size:11px;background:var(--azul-bg);color:var(--azul);padding:1px 7px;border-radius:20px;font-weight:500;margin-left:6px">'+ev.curso_nombre+'</span>':'';
@@ -1548,7 +1566,7 @@ function renderResumen(){
     ag.appendChild(d);
   });
   var est=document.getElementById('res-estados');est.innerHTML='';
-  var grupos={};DB.cursos.forEach(function(c){grupos[c.estado]=(grupos[c.estado]||0)+1});
+  var grupos={};DB.cursos.forEach(function(c){grupos[estadoEfectivo(c)]=(grupos[estadoEfectivo(c)]||0)+1});
   Object.keys(grupos).forEach(function(k){
     var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--borde)';
     row.innerHTML='<span class="pill '+ep(k)+'">'+k+'</span><span style="font-size:18px;font-weight:700;color:var(--azul)">'+grupos[k]+'</span>';
@@ -1583,14 +1601,14 @@ function setFilt(btn){filtEst=btn.dataset.est;document.querySelectorAll('.fbtn')
 function renderCursosExp(){
   var q=(document.getElementById('q-curso')||{value:''}).value.toLowerCase();
   var lista=DB.cursos.filter(function(c){
-    return(filtEst==='todos'||c.estado===filtEst)&&(!q||(c.nombre+c.dest+c.ambito).toLowerCase().includes(q));
+    return(filtEst==='todos'||estadoEfectivo(c)===filtEst)&&(!q||(c.nombre+c.dest+c.ambito).toLowerCase().includes(q));
   });
   var cont=document.getElementById('lista-cursos');cont.innerHTML='';
   if(!lista.length){cont.innerHTML='<div style="text-align:center;padding:2rem;color:var(--texto2);font-style:italic">Sin cursos</div>';return}
   lista.forEach(function(c){
     var tieneEd=c.ediciones&&c.ediciones.length>0;
     var row=document.createElement('div');row.className='cr-main';row.dataset.id=c.id;
-    row.innerHTML='<svg class="cr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;visibility:'+(tieneEd?'visible':'hidden')+'"><polyline points="9 18 15 12 9 6"/></svg><div style="flex:1;font-weight:600;font-size:13px">'+c.nombre+'</div><div style="width:130px;font-size:12px;color:var(--texto2)">'+c.dest+'</div><div style="width:85px"><span class="pill '+ep(c.estado)+'">'+c.estado+'</span></div><div style="width:75px;font-size:12px;color:var(--texto2)">'+(c.tipoCurso||c.tipo)+'</div><div style="width:70px;font-size:12px;color:var(--texto2)">'+c.tipo+'</div><div style="width:60px;text-align:center;font-weight:700;color:var(--azul)">'+totAl(c)+'</div><div style="width:50px;display:flex;justify-content:flex-end"><button class="btn btn-sm" onclick="event.stopPropagation();abrirCurso('+c.id+')">Ver</button></div>';
+    row.innerHTML='<svg class="cr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;visibility:'+(tieneEd?'visible':'hidden')+'"><polyline points="9 18 15 12 9 6"/></svg><div style="flex:1;font-weight:600;font-size:13px">'+c.nombre+'</div><div style="width:130px;font-size:12px;color:var(--texto2)">'+c.dest+'</div><div style="width:85px"><span class="pill '+ep(estadoEfectivo(c))+'">'+c.estado+'</span></div><div style="width:75px;font-size:12px;color:var(--texto2)">'+(c.tipoCurso||c.tipo)+'</div><div style="width:70px;font-size:12px;color:var(--texto2)">'+c.tipo+'</div><div style="width:60px;text-align:center;font-weight:700;color:var(--azul)">'+totAl(c)+'</div><div style="width:50px;display:flex;justify-content:flex-end"><button class="btn btn-sm" onclick="event.stopPropagation();abrirCurso('+c.id+')">Ver</button></div>';
     if(tieneEd)row.onclick=function(){togEd(this,c.id)};
     cont.appendChild(row);
     var panel=document.createElement('div');panel.className='cr-panel';panel.dataset.pid=c.id;
@@ -1620,7 +1638,7 @@ function abrirCurso(id){
   document.getElementById('bc-n').textContent=c.nombre;
   document.getElementById('det-n').textContent=c.nombre;
   document.getElementById('det-m').textContent=c.carga+' · '+c.ambito+' · '+c.dest;
-  document.getElementById('det-pills').innerHTML='<span class="pill '+ep(c.estado)+'">'+c.estado+'</span><span class="pill p-cur">'+(c.tipoCurso||'Curso')+'</span><span class="pill p-cur">'+c.tipo+'</span>';
+  document.getElementById('det-pills').innerHTML='<span class="pill '+ep(estadoEfectivo(c))+'">'+c.estado+'</span><span class="pill p-cur">'+(c.tipoCurso||'Curso')+'</span><span class="pill p-cur">'+c.tipo+'</span>';
   document.getElementById('m-al-t').textContent='Agregar alumno';
   document.getElementById('m-imp-t').textContent='Importar alumnos';
   resetImp();
@@ -1643,7 +1661,7 @@ function abrirEdAl(cid,eid){
   document.getElementById('bc-n').textContent=c.nombre+' / '+ed.num;
   document.getElementById('det-n').textContent=c.nombre;
   document.getElementById('det-m').textContent=ed.num+' · '+fmt(ed.inicio)+' → '+fmt(ed.fin);
-  document.getElementById('det-pills').innerHTML='<span class="pill '+ep(c.estado)+'">'+c.estado+'</span><span class="pill '+ep(ed.estado)+'">'+ed.estado+'</span>';
+  document.getElementById('det-pills').innerHTML='<span class="pill '+ep(estadoEfectivo(c))+'">'+c.estado+'</span><span class="pill '+ep(ed.estado)+'">'+ed.estado+'</span>';
   document.getElementById('m-al-t').textContent='Agregar alumno · '+ed.num;
   document.getElementById('m-imp-t').textContent='Importar alumnos · '+ed.num;
   document.getElementById('al-sin-ed').style.display='block';
@@ -1735,11 +1753,14 @@ function showAgendaTab(id,btn){
   document.getElementById('ag-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   if(id==='cal')renderCal();
+  if(id==='pasadas')renderAgendaPasadas();
 }
 function renderAgendaLista(){
   var cont=document.getElementById('agenda-list');cont.innerHTML='';
-  if(!DB.agenda.length){cont.innerHTML='<div class="card card-body" style="text-align:center;color:var(--texto2);font-style:italic;padding:2rem">Sin actividades</div>';updAgSelCount();return;}
-  var s=DB.agenda.slice().sort(function(a,b){return a.fecha.localeCompare(b.fecha)});
+  var hoy=hoyISO();
+  var prox=DB.agenda.filter(function(ev){return ev.fecha>=hoy});
+  if(!prox.length){cont.innerHTML='<div class="card card-body" style="text-align:center;color:var(--texto2);font-style:italic;padding:2rem">Sin próximas actividades — revisá la sección <strong>Actividades pasadas</strong></div>';updAgSelCount();return;}
+  var s=prox.sort(function(a,b){return a.fecha.localeCompare(b.fecha)});
   var byD={};s.forEach(function(ev){(byD[ev.fecha]=byD[ev.fecha]||[]).push(ev)});
   Object.keys(byD).sort().forEach(function(f){
     var d=new Date(f+'T00:00');
@@ -1782,6 +1803,50 @@ function renderAgendaLista(){
     cont.appendChild(sec);
   });
   updAgSelCount();
+}
+
+function renderAgendaPasadas(){
+  var cont=document.getElementById('agenda-pasadas-list');if(!cont)return;cont.innerHTML='';
+  var hoy=hoyISO();
+  var desde=document.getElementById('filtro-desde')?document.getElementById('filtro-desde').value:'';
+  var hasta=document.getElementById('filtro-hasta')?document.getElementById('filtro-hasta').value:'';
+  var past=DB.agenda.filter(function(ev){
+    if(ev.fecha>=hoy)return false;
+    if(desde&&ev.fecha<desde)return false;
+    if(hasta&&ev.fecha>hasta)return false;
+    return true;
+  }).sort(function(a,b){return b.fecha.localeCompare(a.fecha)});
+  if(!past.length){
+    cont.innerHTML='<div class="card card-body" style="text-align:center;color:var(--texto2);font-style:italic;padding:2rem">Sin actividades pasadas'+(desde||hasta?' en el rango seleccionado':'')+'</div>';
+    return;
+  }
+  var byD={};past.forEach(function(ev){(byD[ev.fecha]=byD[ev.fecha]||[]).push(ev)});
+  Object.keys(byD).sort(function(a,b){return b.localeCompare(a)}).forEach(function(f){
+    var d=new Date(f+'T00:00');
+    var lbl=d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    var sec=document.createElement('div');sec.className='ag-day';
+    sec.style.opacity='0.75';
+    sec.innerHTML='<div class="ag-day-lbl" style="color:var(--texto2)">'+lbl+' <span style="font-size:11px;background:#f0f0f0;color:#888;padding:1px 6px;border-radius:10px;margin-left:6px">pasada</span></div>';
+    byD[f].forEach(function(ev){
+      var e=document.createElement('div');e.className='ag-ev';
+      var stripe=document.createElement('div');stripe.className='ag-stripe';stripe.style.background=ev.color||'#ccc';e.appendChild(stripe);
+      var body=document.createElement('div');body.style.flex='1';
+      var cursoTag=ev.curso_nombre?'<span style="font-size:11px;background:var(--azul-bg);color:var(--azul);padding:2px 8px;border-radius:20px;font-weight:500;margin-left:7px;vertical-align:middle">'+ev.curso_nombre+'</span>':'';
+      body.innerHTML='<div class="ag-ttl">'+ev.titulo+cursoTag+'</div>'
+        +'<div class="ag-det">'+(ev.hora?ev.hora+' · ':'')+ev.doc+(ev.sede?' · '+ev.sede:'')+' '+fmt(ev.fecha)+'</div>';
+      e.appendChild(body);
+      var be=document.createElement('button');be.className='btn btn-sm';be.innerHTML='✏';
+      be.onclick=function(ev2){ev2.stopPropagation();editAct(ev.id);};
+      e.appendChild(be);
+      sec.appendChild(e);
+    });
+    cont.appendChild(sec);
+  });
+}
+function limpiarFiltrosPast(){
+  var d=document.getElementById('filtro-desde');if(d)d.value='';
+  var h=document.getElementById('filtro-hasta');if(h)h.value='';
+  renderAgendaPasadas();
 }
 
 function updAgSelCount(){
