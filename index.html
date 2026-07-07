@@ -2626,7 +2626,7 @@ function genDiplomas(){
   als.forEach(function(al,i){
     var nc=(al.nombre||'')+' '+(al.apellido||'');nc=nc.trim();
     // Texto estándar con los datos reales
-    var txt='Se certifica que '+nc+' se ha desempeñado en calidad de '+calidad+' en '+c.nombre+'.';
+    var txt='se ha desempeñado en calidad de '+calidad+' en '+c.nombre+'.';
     if(horas&&horas.trim())txt+=' Carga horaria: '+horas.trim()+'.';
     if(txtExtra)txt+=' '+txtExtra.replace(/\[NOMBRE\]/g,nc);
     document.getElementById('dip-bar').style.width=Math.round(((i+1)/als.length)*100)+'%';
@@ -2668,7 +2668,7 @@ function buildDip(nombre,texto,curso,fecha,firma,calidad,horas){
     +'<style>@import url(\'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500&display=swap\');'
     +'*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Inter,sans-serif;background:#d8d8d8;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;print-color-adjust:exact}'
-    +'@media print{body{background:#fff;padding:0;min-height:unset}}'
+    +'@media print{@page{size:A4 landscape;margin:0}body{background:#fff;padding:0;min-height:unset;width:297mm;height:210mm}}'
     +'.dip-wrap{position:relative;width:900px;min-height:637px;background:#fff;box-shadow:0 8px 40px rgba(0,0,0,.2)}'
     +'.dip-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}'
     +'.dip-body{position:relative;z-index:2;padding:175px 90px 165px;text-align:center}'
