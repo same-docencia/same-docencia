@@ -1720,7 +1720,8 @@ function renderAlTabla(tb,lista){
   lista.forEach(function(al){
     var tr=document.createElement('tr');tr.className='dr';
     var av='<div class="av" style="background:'+avB(al.apellido)+';color:'+avC(al.apellido)+'">'+ini(al.apellido,al.nombre)+'</div>';
-    tr.innerHTML='<td><input type="checkbox" class="al-ck" data-id="'+al.id+'" onchange="updSelCnt()" style="width:14px;height:14px;accent-color:var(--violeta);cursor:pointer"></td><td>'+av+'<span style="font-weight:600">'+al.apellido+', '+al.nombre+'</span></td><td style="color:var(--texto2);font-size:12px">'+al.prof+'</td><td style="color:var(--texto2);font-size:12px">'+al.inst+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.dni||'—')+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.mail||'—')+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.cel||'—')+'</td><td><span class="pill '+ep(al.estado)+'">'+al.estado+'</span></td><td><button class="btn btn-sm btn-dng" onclick="delAl('+al.id+')">✕</button></td>';
+    var dipBadge=al.dipEmitido?'<span title="Diploma emitido el '+( al.dipFecha||'')+'" style="font-size:14px;margin-left:5px;cursor:default" title="Diploma emitido">🎓</span>':'';
+    tr.innerHTML='<td><input type="checkbox" class="al-ck" data-id="'+al.id+'" onchange="updSelCnt()" style="width:14px;height:14px;accent-color:var(--violeta);cursor:pointer"></td><td>'+av+'<span style="font-weight:600">'+al.apellido+', '+al.nombre+'</span>'+dipBadge+'</td><td style="color:var(--texto2);font-size:12px">'+al.prof+'</td><td style="color:var(--texto2);font-size:12px">'+al.inst+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.dni||'—')+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.mail||'—')+'</td><td style="font-size:12px;color:var(--texto2)">'+(al.cel||'—')+'</td><td><span class="pill '+ep(al.estado)+'">'+al.estado+'</span></td><td><button class="btn btn-sm btn-dng" onclick="delAl('+al.id+')">✕</button></td>';
     tb.appendChild(tr);
   });
   updSelCnt();
@@ -2626,17 +2627,25 @@ function genDiplomas(){
     var nc=(al.nombre||'')+' '+(al.apellido||'');nc=nc.trim();
     // Texto estándar con los datos reales
     var txt='Se certifica que '+nc+' se ha desempeñado en calidad de '+calidad+' en '+c.nombre+'.';
-    if(horas)txt+=' Carga horaria: '+horas+'.';
+    if(horas&&horas.trim())txt+=' Carga horaria: '+horas.trim()+'.';
     if(txtExtra)txt+=' '+txtExtra.replace(/\[NOMBRE\]/g,nc);
     document.getElementById('dip-bar').style.width=Math.round(((i+1)/als.length)*100)+'%';
     document.getElementById('dip-lbl').textContent='Generando diploma '+(i+1)+' de '+als.length+'...';
-    diplomasG.push({nombre:nc,html:buildDip(nc,txt,c.nombre,fecha,calidad,horas),ok:true});
+    var dipHtml=buildDip(nc,txt,c.nombre,fecha,calidad,horas);
+    diplomasG.push({nombre:nc,html:dipHtml,ok:true,al:al,cid:c.id});
+    // marcar emitido en el objeto local
+    al.dipEmitido=true;al.dipFecha=new Date().toISOString().slice(0,10);
+    // guardar en Supabase
+    var eidLocal=DB.edicionActual!=null?DB.edicionActual:null;
+    dbGuardarAlumno(Object.assign({},al,{dipEmitido:true,dipFecha:al.dipFecha}),c.id,eidLocal);
+    var idxLocal=i;
     var item=document.createElement('div');
     item.className='dip-item dip-ok';
     item.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--borde)';
     item.innerHTML='<span style="font-size:13px;font-weight:500">'+nc+'</span>'
       +'<div style="display:flex;gap:6px">'
-      +'<button class="btn btn-sm" onclick="prevDip('+i+')">👁 Ver</button>'
+      +'<button class="btn btn-sm" onclick="prevDip('+idxLocal+')">👁 Ver</button>'
+      +'<button class="btn btn-sm btn-dip" onclick="dlDip('+idxLocal+')">⬇ PDF</button>'
       +'<span class="pill p-act">✓</span>'
       +'</div>';
     resDiv.appendChild(item);
@@ -2683,7 +2692,30 @@ function buildDip(nombre,texto,curso,fecha,firma,calidad,horas){
   return h.replace('__BG__',bg);
 }
 
-function dlTodos(){diplomasG.filter(function(d){return d.ok}).forEach(function(d,i){setTimeout(function(){var b=new Blob([d.html],{type:'text/html;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='diploma_'+d.nombre.replace(/\s+/g,'_').toLowerCase().replace(/[^a-z0-9_]/g,'')+'.html';a.click();URL.revokeObjectURL(a.href)},i*350)})}
+function dlDip(idx){
+  var d=diplomasG[idx];if(!d||!d.html)return;
+  var w=window.open('','_blank');
+  w.document.open();w.document.write(d.html);w.document.close();
+  setTimeout(function(){w.print();},800);
+}
+function dlTodos(){
+  var ok=diplomasG.filter(function(d){return d.ok});if(!ok.length)return;
+  // Abrir todos en una sola página para imprimir/PDF juntos
+  var combined='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Diplomas</title>'
+    +'<style>body{margin:0;padding:0;background:#888}'
+    +'@media print{body{background:#fff}.pg{page-break-after:always}}'
+    +'.pg{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;print-color-adjust:exact}'
+    +'</style></head><body>';
+  ok.forEach(function(d,i){
+    // extraer el <body> de cada diploma
+    var m=d.html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    combined+='<div class="pg">'+(m?m[1]:d.html)+'</div>';
+  });
+  combined+='<script>setTimeout(function(){window.print()},800);<\/script>';
+  combined+='</body></html>';
+  var w=window.open('','_blank');
+  w.document.open();w.document.write(combined);w.document.close();
+}
 function resetDip(){document.getElementById('dip-cfg').style.display='block';document.getElementById('dip-prog').style.display='none';diplomasG=[]}
 
 // ===== EXPORTAR ALUMNOS A EXCEL =====
