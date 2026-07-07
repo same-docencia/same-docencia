@@ -2612,37 +2612,43 @@ function prepDiplomas(){
   document.getElementById('dip-cfg').style.display='block';document.getElementById('dip-prog').style.display='none';document.getElementById('btn-dl').style.display='none';
   diplomasG=[];openM('m-dip');
 }
-async function genDiplomas(){
+function genDiplomas(){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
   var als=getAlsSel();if(!als.length)return;
-  var txtBase=document.getElementById('dip-txt').value.trim();
+  var txtExtra=document.getElementById('dip-txt').value.trim();
   var fecha=fmt(document.getElementById('dip-f').value);
   var calidad=document.getElementById('dip-calidad').value||'asistente';
   var horas=document.getElementById('dip-horas').value.trim();
-  var firma='Dr. Diego Slipak';
-  document.getElementById('dip-cfg').style.display='none';document.getElementById('dip-prog').style.display='block';
+  document.getElementById('dip-cfg').style.display='none';
+  document.getElementById('dip-prog').style.display='block';
   var resDiv=document.getElementById('dip-res');resDiv.innerHTML='';diplomasG=[];
-  for(var i=0;i<als.length;i++){
-    var al=als[i];
-    document.getElementById('dip-bar').style.width=Math.round((i/als.length)*100)+'%';
+  als.forEach(function(al,i){
+    var nc=(al.nombre||'')+' '+(al.apellido||'');nc=nc.trim();
+    // Texto estándar con los datos reales
+    var txt='Se certifica que '+nc+' se ha desempeñado en calidad de '+calidad+' en '+c.nombre+'.';
+    if(horas)txt+=' Carga horaria: '+horas+'.';
+    if(txtExtra)txt+=' '+txtExtra.replace(/\[NOMBRE\]/g,nc);
+    document.getElementById('dip-bar').style.width=Math.round(((i+1)/als.length)*100)+'%';
     document.getElementById('dip-lbl').textContent='Generando diploma '+(i+1)+' de '+als.length+'...';
-    var nc=al.nombre+' '+al.apellido;
-    try{
-      var resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:'Generá el texto formal de un diploma en español para:\n- Nombre: '+nc+'\n- Profesión: '+al.prof+'\n- Institución: '+al.inst+(al.dni?'\n- DNI: '+al.dni:'')+'\n- Curso: '+c.nombre+'\n- Institución emisora: SAME · Buenos Aires\n- Coordinador: Dr. Diego Slipak\n- Director General: Dr. Alberto Crescenti\n- Carga: '+c.carga+'\n- Fecha: '+fecha+'\nSolo el cuerpo del diploma, formal, 3-4 líneas.'}]})});
-      var data=await resp.json();
-      var txt=(data.content&&data.content[0]&&data.content[0].text)||txtBase.replace('[NOMBRE]',nc);
-      diplomasG.push({nombre:nc,html:buildDip(nc,txt,c.nombre,fecha,firma,calidad,horas),ok:true});
-      var item=document.createElement('div');item.className='dip-item dip-ok';item.innerHTML='<span style="font-size:13px;font-weight:500">'+nc+'</span><span class="pill p-act">✓</span>';resDiv.appendChild(item);
-    }catch(e){
-      diplomasG.push({nombre:nc,html:'',ok:false});
-      var item=document.createElement('div');item.className='dip-item dip-err';item.innerHTML='<span style="font-size:13px;font-weight:500">'+nc+'</span><span class="pill p-pend">Error</span>';resDiv.appendChild(item);
-    }
-    await new Promise(function(r){setTimeout(r,200)});
-  }
+    diplomasG.push({nombre:nc,html:buildDip(nc,txt,c.nombre,fecha,calidad,horas),ok:true});
+    var item=document.createElement('div');
+    item.className='dip-item dip-ok';
+    item.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--borde)';
+    item.innerHTML='<span style="font-size:13px;font-weight:500">'+nc+'</span>'
+      +'<div style="display:flex;gap:6px">'
+      +'<button class="btn btn-sm" onclick="prevDip('+i+')">👁 Ver</button>'
+      +'<span class="pill p-act">✓</span>'
+      +'</div>';
+    resDiv.appendChild(item);
+  });
   document.getElementById('dip-bar').style.width='100%';
-  var ok=diplomasG.filter(function(d){return d.ok}).length;
-  document.getElementById('dip-lbl').textContent='Listo: '+ok+' diploma'+(ok===1?'':'s')+' generado'+(ok===1?'':'s');
+  document.getElementById('dip-lbl').textContent='Listo: '+als.length+' diploma'+(als.length===1?'':'s')+' generado'+(als.length===1?'':'s');
   document.getElementById('btn-dl').style.display='inline-flex';
+}
+function prevDip(idx){
+  var d=diplomasG[idx];if(!d||!d.html)return;
+  var w=window.open('','_blank');
+  w.document.open();w.document.write(d.html);w.document.close();
 }
 function buildDip(nombre,texto,curso,fecha,firma,calidad,horas){
   calidad=calidad||'asistente';
