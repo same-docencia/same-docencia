@@ -651,8 +651,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="number" id="cant-ref-input" min="0" placeholder="Ej: 25"
-                style="width:90px;padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:13px"
-                oninput="actualizarCantRef(this.value)">
+                style="width:90px;padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:13px">
               <span style="font-size:12px;color:var(--texto2)">participantes</span>
             </div>
             <div id="cant-ref-estado" style="font-size:12px;color:var(--verde)"></div>
@@ -1549,9 +1548,14 @@ function fmt(s){if(!s)return'—';var d=new Date(s+'T00:00');return d.toLocaleDa
 function nid(arr){return arr&&arr.length?Math.max.apply(null,arr.map(function(x){return x.id}))+1:1}
 function totAl(c){
   var n=c.alumnos?c.alumnos.length:0;
-  if(c.ediciones)c.ediciones.forEach(function(e){n+=(e.alumnos?e.alumnos.length:0)});
-  // Si no hay alumnos nominales y hay cantidad referencial, usarla
-  if(n===0&&c.cantRef&&c.cantRef>0)n=c.cantRef;
+  if(c.ediciones)c.ediciones.forEach(function(e){
+    var ne=e.alumnos?e.alumnos.length:0;
+    // Si la edición no tiene nominales pero tiene cantRef, usarla
+    if(ne===0&&e.cantRef&&e.cantRef>0)ne=e.cantRef;
+    n+=ne;
+  });
+  // Si el curso no tiene ediciones, no tiene nominales y tiene cantRef, usarla
+  if((!c.ediciones||!c.ediciones.length)&&n===0&&c.cantRef&&c.cantRef>0)n=c.cantRef;
   return n;
 }
 
@@ -1701,8 +1705,7 @@ function abrirEdAl(cid,eid){
   document.getElementById('al-con-ed').style.display='none';
   showTab('ta',document.querySelectorAll('.tab')[1]);
   resetImp(); // limpiar el modal de importar
-  // Ocultar panel cant ref cuando hay ediciones
-  var panelRef=document.getElementById('panel-cant-ref');if(panelRef)panelRef.style.display='none';
+  mostrarPanelCantRefEd(ed);
   renderAlEd(ed);renderClasesCurso(c);renderEdDet(c);
 }
 function volverCursos(){
@@ -1757,14 +1760,42 @@ function filtAl(){
   if(DB.edicionActual!=null){var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(ed)renderAlEd(ed);return}
   renderAlCurso(c,document.getElementById('q-al').value.toLowerCase()||undefined);
 }
+
+function actualizarCantRef(val){
+  var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
+  var n=parseInt(val)||0;
+  c.cantRef=n;
+  var estado=document.getElementById('cant-ref-estado');
+  if(estado)estado.textContent=n>0?'✓ Guardado: '+n+' participantes':'';
+  dbGuardarCurso(c);
+  buildChips();renderResumen();
+}
+function mostrarPanelCantRefEd(ed){
+  var panel=document.getElementById('panel-cant-ref');
+  if(!panel||!ed)return;
+  panel.style.display='block';
+  var inp=document.getElementById('cant-ref-input');
+  if(inp)inp.value=ed.cantRef>0?ed.cantRef:'';
+  var estado=document.getElementById('cant-ref-estado');
+  if(estado){
+    if(ed.alumnos&&ed.alumnos.length>0){
+      estado.textContent='✓ Se usa el listado nominal ('+ed.alumnos.length+' alumnos)';
+    } else if(ed.cantRef>0){
+      estado.textContent='✓ Guardado: '+ed.cantRef+' participantes';
+    } else {
+      estado.textContent='';
+    }
+  }
+  // Cambiar el oninput para que apunte a la edición
+  inp.oninput=function(){actualizarCantRefEd(this.value);};
+}
 function mostrarPanelCantRef(c){
   var panel=document.getElementById('panel-cant-ref');
   if(!panel||!c)return;
-  // Solo mostrar si el curso NO tiene ediciones
   if(c.ediciones&&c.ediciones.length>0){panel.style.display='none';return;}
   panel.style.display='block';
   var inp=document.getElementById('cant-ref-input');
-  if(inp)inp.value=c.cantRef>0?c.cantRef:'';
+  if(inp){inp.value=c.cantRef>0?c.cantRef:'';inp.oninput=function(){actualizarCantRef(this.value);};}
   var estado=document.getElementById('cant-ref-estado');
   if(estado){
     if(c.alumnos&&c.alumnos.length>0){
@@ -1776,17 +1807,15 @@ function mostrarPanelCantRef(c){
     }
   }
 }
-function actualizarCantRef(val){
+function actualizarCantRefEd(val){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
+  var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(!ed)return;
   var n=parseInt(val)||0;
-  c.cantRef=n;
+  ed.cantRef=n;
   var estado=document.getElementById('cant-ref-estado');
   if(estado)estado.textContent=n>0?'✓ Guardado: '+n+' participantes':'';
-  // Guardar en Supabase
-  dbGuardarCurso(c);
-  // Actualizar estadísticas
-  buildChips();
-  renderResumen();
+  dbGuardarEdicion(c,ed);
+  buildChips();renderResumen();
 }
 function togAll(cb){document.querySelectorAll('.al-ck').forEach(function(c){c.checked=cb.checked});updSelCnt()}
 function updSelCnt(){
