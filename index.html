@@ -643,6 +643,24 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
           <button class="btn btn-sm" onclick="openM('m-imp')">↑ Importar</button>
           <button class="btn btn-dip btn-sm" id="btn-dip" onclick="prepDiplomas()" disabled>⬜ Emitir diplomas</button>
         </div>
+        <!-- Panel cantidad referencial -->
+        <div id="panel-cant-ref" style="display:none;margin-bottom:10px;padding:10px 14px;background:var(--gris-claro);border-radius:8px;border:1px solid var(--borde)">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="font-size:13px;color:var(--texto2);font-weight:500">
+              📊 Sin listado nominal — indicar cantidad de participantes:
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="cant-ref-input" min="0" placeholder="Ej: 25"
+                style="width:90px;padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:13px"
+                oninput="actualizarCantRef(this.value)">
+              <span style="font-size:12px;color:var(--texto2)">participantes</span>
+            </div>
+            <div id="cant-ref-estado" style="font-size:12px;color:var(--verde)"></div>
+          </div>
+          <div style="font-size:11px;color:var(--texto2);margin-top:5px">
+            💡 Esta cantidad se usa en las estadísticas del dashboard. Si luego cargás el listado nominal, se usará ese.
+          </div>
+        </div>
         <div class="selbar">
           <label><input type="checkbox" id="sel-all" onchange="togAll(this)"> Seleccionar todos</label>
           <span style="font-size:12px;color:var(--texto2);flex:1" id="sel-cnt">0 seleccionados</span>
@@ -1529,7 +1547,13 @@ function estadoEfectivo(c){
 function ep(e){var m={Activo:'p-act',Programado:'p-prog','En desarrollo':'p-pend',Finalizado:'p-fin','En curso':'p-act',Inscripto:'p-prog',Cursando:'p-act',Aprobado:'p-act',Egresado:'p-fin',Programada:'p-prog'};return m[e]||'p-prog'}
 function fmt(s){if(!s)return'—';var d=new Date(s+'T00:00');return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function nid(arr){return arr&&arr.length?Math.max.apply(null,arr.map(function(x){return x.id}))+1:1}
-function totAl(c){var n=c.alumnos?c.alumnos.length:0;if(c.ediciones)c.ediciones.forEach(function(e){n+=(e.alumnos?e.alumnos.length:0)});return n}
+function totAl(c){
+  var n=c.alumnos?c.alumnos.length:0;
+  if(c.ediciones)c.ediciones.forEach(function(e){n+=(e.alumnos?e.alumnos.length:0)});
+  // Si no hay alumnos nominales y hay cantidad referencial, usarla
+  if(n===0&&c.cantRef&&c.cantRef>0)n=c.cantRef;
+  return n;
+}
 
 // NAV
 function navTo(id,btn){
@@ -1658,7 +1682,7 @@ function abrirCurso(id){
   var tieneEd=c.ediciones&&c.ediciones.length>0;
   document.getElementById('al-sin-ed').style.display=tieneEd?'none':'block';
   document.getElementById('al-con-ed').style.display=tieneEd?'block':'none';
-  if(!tieneEd)renderAlCurso(c);
+  if(!tieneEd){renderAlCurso(c);mostrarPanelCantRef(c);}
   renderEdDet(c);
 }
 function abrirEdAl(cid,eid){
@@ -1677,6 +1701,8 @@ function abrirEdAl(cid,eid){
   document.getElementById('al-con-ed').style.display='none';
   showTab('ta',document.querySelectorAll('.tab')[1]);
   resetImp(); // limpiar el modal de importar
+  // Ocultar panel cant ref cuando hay ediciones
+  var panelRef=document.getElementById('panel-cant-ref');if(panelRef)panelRef.style.display='none';
   renderAlEd(ed);renderClasesCurso(c);renderEdDet(c);
 }
 function volverCursos(){
@@ -1730,6 +1756,37 @@ function filtAl(){
   var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
   if(DB.edicionActual!=null){var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(ed)renderAlEd(ed);return}
   renderAlCurso(c,document.getElementById('q-al').value.toLowerCase()||undefined);
+}
+function mostrarPanelCantRef(c){
+  var panel=document.getElementById('panel-cant-ref');
+  if(!panel||!c)return;
+  // Solo mostrar si el curso NO tiene ediciones
+  if(c.ediciones&&c.ediciones.length>0){panel.style.display='none';return;}
+  panel.style.display='block';
+  var inp=document.getElementById('cant-ref-input');
+  if(inp)inp.value=c.cantRef>0?c.cantRef:'';
+  var estado=document.getElementById('cant-ref-estado');
+  if(estado){
+    if(c.alumnos&&c.alumnos.length>0){
+      estado.textContent='✓ Se usa el listado nominal ('+c.alumnos.length+' alumnos)';
+    } else if(c.cantRef>0){
+      estado.textContent='✓ Guardado: '+c.cantRef+' participantes';
+    } else {
+      estado.textContent='';
+    }
+  }
+}
+function actualizarCantRef(val){
+  var c=DB.cursos.find(function(x){return x.id===DB.cursoActual});if(!c)return;
+  var n=parseInt(val)||0;
+  c.cantRef=n;
+  var estado=document.getElementById('cant-ref-estado');
+  if(estado)estado.textContent=n>0?'✓ Guardado: '+n+' participantes':'';
+  // Guardar en Supabase
+  dbGuardarCurso(c);
+  // Actualizar estadísticas
+  buildChips();
+  renderResumen();
 }
 function togAll(cb){document.querySelectorAll('.al-ck').forEach(function(c){c.checked=cb.checked});updSelCnt()}
 function updSelCnt(){
@@ -2278,7 +2335,7 @@ function agregarClaseDeBib(id){
 // GUARDAR VARIOS
 function guardarCurso(){
   var n=document.getElementById('nc-n').value.trim();if(!n)return;
-  var nuevo={id:DB.nextId++,nombre:n,dest:document.getElementById('nc-d').value.trim()||'—',carga:document.getElementById('nc-c').value.trim()||'—',ambito:document.getElementById('nc-a').value.trim()||'—',tipoCurso:document.getElementById('nc-tipo').value,tipo:document.getElementById('nc-t').value,estado:document.getElementById('nc-e').value,finicio:document.getElementById('nc-finicio').value,ffin:document.getElementById('nc-ffin').value,clases:[],alumnos:[],ediciones:[],_nuevo:true};
+  var nuevo={id:DB.nextId++,nombre:n,dest:document.getElementById('nc-d').value.trim()||'—',carga:document.getElementById('nc-c').value.trim()||'—',ambito:document.getElementById('nc-a').value.trim()||'—',tipoCurso:document.getElementById('nc-tipo').value,tipo:document.getElementById('nc-t').value,estado:document.getElementById('nc-e').value,finicio:document.getElementById('nc-finicio').value,ffin:document.getElementById('nc-ffin').value,clases:[],alumnos:[],ediciones:[],cantRef:0,_nuevo:true};
   DB.cursos.push(nuevo);
   dbGuardarCurso(nuevo).then(function(){recargarDatos();});
   closeM('m-nc');['nc-n','nc-d','nc-c','nc-a','nc-finicio','nc-ffin'].forEach(function(i){document.getElementById(i).value=''});
