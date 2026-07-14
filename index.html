@@ -1469,6 +1469,9 @@ async function supa(tabla, metodo, body, filtro){
       var err=await r.text();
       console.error('Supabase error',metodo,tabla,r.status,err);
       setSyncStatus('error');
+      // Mostrar error visible en pantalla para diagnóstico
+      var sb=document.getElementById('sync-badge');
+      if(sb)sb.title='Error en '+tabla+' ('+metodo+'): '+err.slice(0,120);
       return null;
     }
     var txt=await r.text();
@@ -4438,6 +4441,7 @@ async function cargarDesdeSupa(){
         id:c.id,nombre:c.nombre,dest:c.dest||'—',carga:c.carga||'—',
         ambito:c.ambito||'—',tipoCurso:c.tipo_curso||'Curso',tipo:c.tipo||'Anual',
         estado:c.estado||'Activo',finicio:c.finicio||'',ffin:c.ffin||'',
+        cantRef:c.cant_ref||0,
         clases:(clases||[]).filter(function(cl){return cl.curso_id===c.id;}).map(function(cl){
           return {id:cl.id,titulo:cl.titulo,fecha:cl.fecha||'',docente:cl.docente||'—',dur:cl.dur||'—',modal:cl.modal||'Presencial'};
         }),
@@ -4445,6 +4449,7 @@ async function cargarDesdeSupa(){
         ediciones:edsDelCurso.map(function(ed){
           return {
             id:ed.id,num:ed.num,inicio:ed.inicio||'',fin:ed.fin||'',estado:ed.estado||'Programada',
+            cantRef:ed.cant_ref||0,
             alumnos:(alumnos||[]).filter(function(a){return a.edicion_id===ed.id;}).map(mapAlumno)
           };
         })
@@ -4497,7 +4502,7 @@ function mapAlumno(a){
 // CURSOS
 async function dbGuardarCurso(c){
   var body={nombre:c.nombre,dest:c.dest,carga:c.carga,ambito:c.ambito,
-    tipo_curso:c.tipoCurso,tipo:c.tipo,estado:c.estado,finicio:c.finicio||null,ffin:c.ffin||null};
+    tipo_curso:c.tipoCurso,tipo:c.tipo,estado:c.estado,finicio:c.finicio||null,ffin:c.ffin||null,cant_ref:c.cantRef||0};
   try{
     if(c._nuevo){
       var res=await supaPost('cursos',body);
@@ -4577,7 +4582,7 @@ async function dbEliminarClase(id){
 
 // EDICIONES
 async function dbGuardarEdicion(ed,cursoId){
-  var body={num:ed.num,inicio:ed.inicio||null,fin:ed.fin||null,estado:ed.estado,curso_id:cursoId};
+  var body={num:ed.num,inicio:ed.inicio||null,fin:ed.fin||null,estado:ed.estado,curso_id:cursoId,cant_ref:ed.cantRef||0};
   if(ed._nuevo){
     var res=await supaPost('ediciones',body);
     if(res&&res[0])ed.id=res[0].id;
