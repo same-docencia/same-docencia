@@ -4738,6 +4738,7 @@ async function cargarDesdeSupa(){
   }catch(e){
     console.error('Error cargando Supabase:',e);
     setSyncStatus('error');
+    if(DB.docentes&&DB.docentes.length>0)return true;
     return false;
   }
 }
@@ -4917,7 +4918,7 @@ async function intentarLogin(){
   try{
     // Cargar datos desde Supabase
     var cargado=await cargarDesdeSupa();
-    if(!cargado){
+    if(!cargado && (!DB.docentes || DB.docentes.length===0)){
       mostrarErrorLogin('No se pudo conectar al servidor. Verificá tu conexión.');
       document.querySelector('#login-screen button').disabled=false;
       return;
