@@ -5093,6 +5093,12 @@ function cerrarMenuMob(){
 // Detectar resize
 window.addEventListener('resize', mostrarNavMob);
 mostrarNavMob();
+// Reset botón login al cargar
+(function(){
+  var btn=document.querySelector('#login-screen button');
+  if(btn)btn.disabled=false;
+})();
+
 </script>
 </body>
 </html>
