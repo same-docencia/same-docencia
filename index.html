@@ -519,6 +519,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
       Informes
     </div>
+    <div class="ni" data-page="solicitudes" onclick="navTo('solicitudes',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Solicitudes
+      <span class="bdg" id="badge-sol">0</span>
+    </div>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Instituciones</div>
@@ -644,7 +649,38 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
           <button class="btn btn-dip btn-sm" id="btn-dip" onclick="prepDiplomas()" disabled>⬜ Emitir diplomas</button>
         </div>
         <!-- Diagnóstico oculto - activar con Ctrl+Shift+D -->
-        <div id="panel-diag" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:7px;font-size:12px;color:#7d5a00">
+        <!-- SOLICITUD DE CURSO -->
+<div class="mov" id="m-sol"><div class="modal modal-lg">
+  <h3 id="m-sol-ttl">Nueva solicitud de curso</h3>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Institución / Entidad solicitante *</label><input type="text" id="sol-inst" placeholder="Ej: Hospital Rivadavia"></div>
+    <div class="fg"><label class="flbl">Título del curso / capacitación *</label><input type="text" id="sol-titulo" placeholder="Ej: RCP Básico"></div>
+  </div>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Fecha de solicitud</label><input type="date" id="sol-fecha-sol"></div>
+    <div class="fg"><label class="flbl">Fecha propuesta del evento</label><input type="date" id="sol-fecha-ev"></div>
+  </div>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Horario propuesto</label><input type="text" id="sol-horario" placeholder="Ej: 9:00 a 13:00 hs"></div>
+    <div class="fg"><label class="flbl">Cantidad de personas</label><input type="number" id="sol-cant" min="1" placeholder="Ej: 30"></div>
+  </div>
+  <div class="fg"><label class="flbl">Lugar / Sede</label><input type="text" id="sol-lugar" placeholder="Ej: Sede del hospital, Av. Las Heras 2670"></div>
+  <div class="fg"><label class="flbl">Estado</label>
+    <select id="sol-estado" style="font-size:13px">
+      <option value="Pendiente">Pendiente</option>
+      <option value="En evaluación">En evaluación</option>
+      <option value="Aprobada">Aprobada</option>
+      <option value="Rechazada">Rechazada</option>
+    </select>
+  </div>
+  <div class="fg"><label class="flbl">Notas / Comentarios</label><textarea id="sol-notas" style="height:70px;font-size:13px;line-height:1.6" placeholder="Detalles adicionales, contacto, observaciones..."></textarea></div>
+  <div class="mfooter">
+    <button class="btn" onclick="closeM('m-sol')">Cancelar</button>
+    <button class="btn btn-pri" onclick="guardarSolicitud()">Guardar solicitud</button>
+  </div>
+</div></div>
+
+<div id="panel-diag" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:7px;font-size:12px;color:#7d5a00">
           <strong>Diagnóstico Supabase:</strong> <span id="diag-msg">—</span>
           <button class="btn btn-sm" onclick="diagSupabase()" style="margin-left:8px">Probar conexión</button>
         </div>
@@ -970,6 +1006,28 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
     <div style="font-size:14px">Seleccioná un rango de fechas y generá el informe</div>
     <div style="font-size:12px;margin-top:6px">Podés filtrar por tipo de actividad o dejar "Todos los tipos"</div>
   </div>
+</div>
+
+<!-- SOLICITUDES DE CURSOS -->
+<div id="page-solicitudes" class="page">
+  <div class="ph">
+    <div>
+      <div class="pt">Solicitudes de cursos</div>
+      <div class="ps">Pedidos de capacitación recibidos por el Programa</div>
+    </div>
+    <button class="btn btn-pri" onclick="abrirNuevaSolicitud()">+ Nueva solicitud</button>
+  </div>
+  <div class="toolbar" style="margin-bottom:1rem">
+    <input type="text" id="q-sol" placeholder="Buscar por institución, título..." oninput="filtrarSolicitudes()" style="max-width:260px">
+    <select id="sol-estado-filt" onchange="filtrarSolicitudes()" style="font-size:13px;padding:5px 8px;border:1px solid var(--borde);border-radius:6px">
+      <option value="">Todos los estados</option>
+      <option value="Pendiente">Pendiente</option>
+      <option value="En evaluación">En evaluación</option>
+      <option value="Aprobada">Aprobada</option>
+      <option value="Rechazada">Rechazada</option>
+    </select>
+  </div>
+  <div id="sol-lista"></div>
 </div>
 
 </main>
@@ -4326,6 +4384,118 @@ document.head.appendChild(shakeStyle);
 var autoRefreshInterval=null;
 var ultimaSync=null;
 
+// ===== SOLICITUDES DE CURSOS =====
+var DB_SOL=[];var SOL_EDIT_ID=null;
+function abrirNuevaSolicitud(){
+  SOL_EDIT_ID=null;
+  document.getElementById('m-sol-ttl').textContent='Nueva solicitud de curso';
+  document.getElementById('sol-inst').value='';
+  document.getElementById('sol-titulo').value='';
+  document.getElementById('sol-fecha-sol').value=hoyISO();
+  document.getElementById('sol-fecha-ev').value='';
+  document.getElementById('sol-horario').value='';
+  document.getElementById('sol-cant').value='';
+  document.getElementById('sol-lugar').value='';
+  document.getElementById('sol-estado').value='Pendiente';
+  document.getElementById('sol-notas').value='';
+  openM('m-sol');
+}
+function abrirEditarSolicitud(id){
+  var s=DB_SOL.find(function(x){return x.id===id;});if(!s)return;
+  SOL_EDIT_ID=id;
+  document.getElementById('m-sol-ttl').textContent='Editar solicitud';
+  document.getElementById('sol-inst').value=s.inst||'';
+  document.getElementById('sol-titulo').value=s.titulo||'';
+  document.getElementById('sol-fecha-sol').value=s.fechaSol||'';
+  document.getElementById('sol-fecha-ev').value=s.fechaEv||'';
+  document.getElementById('sol-horario').value=s.horario||'';
+  document.getElementById('sol-cant').value=s.cant||'';
+  document.getElementById('sol-lugar').value=s.lugar||'';
+  document.getElementById('sol-estado').value=s.estado||'Pendiente';
+  document.getElementById('sol-notas').value=s.notas||'';
+  openM('m-sol');
+}
+function guardarSolicitud(){
+  var inst=document.getElementById('sol-inst').value.trim();
+  var titulo=document.getElementById('sol-titulo').value.trim();
+  if(!inst||!titulo){mostrarError('La institución y el título son obligatorios.');return;}
+  var obj={
+    inst:inst,titulo:titulo,
+    fechaSol:document.getElementById('sol-fecha-sol').value,
+    fechaEv:document.getElementById('sol-fecha-ev').value,
+    horario:document.getElementById('sol-horario').value.trim(),
+    cant:parseInt(document.getElementById('sol-cant').value)||0,
+    lugar:document.getElementById('sol-lugar').value.trim(),
+    estado:document.getElementById('sol-estado').value,
+    notas:document.getElementById('sol-notas').value.trim()
+  };
+  if(SOL_EDIT_ID!=null){
+    var s=DB_SOL.find(function(x){return x.id===SOL_EDIT_ID;});
+    if(s){Object.assign(s,obj);supaPatch('solicitudes','id=eq.'+SOL_EDIT_ID,obj);}
+  } else {
+    obj.id=nid(DB_SOL);obj._nuevo=true;DB_SOL.push(obj);
+    supaPost('solicitudes',obj).then(function(res){if(res&&res[0])obj.id=res[0].id;delete obj._nuevo;});
+  }
+  closeM('m-sol');
+  renderSolicitudes();
+  updBadgeSol();
+}
+function eliminarSolicitud(id){
+  if(!confirm('¿Eliminar esta solicitud?'))return;
+  DB_SOL=DB_SOL.filter(function(x){return x.id!==id;});
+  supaDelete('solicitudes','id=eq.'+id);
+  renderSolicitudes();updBadgeSol();
+}
+function filtrarSolicitudes(){renderSolicitudes();}
+function updBadgeSol(){
+  var b=document.getElementById('badge-sol');
+  if(b)b.textContent=DB_SOL.filter(function(s){return s.estado==='Pendiente'||s.estado==='En evaluación';}).length;
+}
+var SOL_COLORES={'Pendiente':'#f59e0b','En evaluación':'#3b82f6','Aprobada':'#10b981','Rechazada':'#ef4444'};
+function renderSolicitudes(){
+  var cont=document.getElementById('sol-lista');if(!cont)return;
+  var q=(document.getElementById('q-sol')?document.getElementById('q-sol').value:'').toLowerCase();
+  var ef=document.getElementById('sol-estado-filt')?document.getElementById('sol-estado-filt').value:'';
+  var lista=DB_SOL.filter(function(s){
+    var ok=(s.inst+s.titulo+s.lugar+s.notas).toLowerCase().includes(q);
+    if(ef&&s.estado!==ef)ok=false;
+    return ok;
+  }).sort(function(a,b){return (b.fechaSol||'').localeCompare(a.fechaSol||'');});
+  if(!lista.length){
+    cont.innerHTML='<div class="card card-body" style="text-align:center;color:var(--texto2);font-style:italic;padding:2rem">Sin solicitudes'+(q||ef?' para los filtros indicados':'')+'</div>';
+    return;
+  }
+  cont.innerHTML='';
+  lista.forEach(function(s){
+    var col=SOL_COLORES[s.estado]||'#888';
+    var card=document.createElement('div');
+    card.className='card';
+    card.style.cssText='margin-bottom:.75rem;border-left:4px solid '+col+';padding:1rem 1.25rem';
+    card.innerHTML=
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">'
+      +'<div style="flex:1">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">'
+      +'<span style="font-weight:600;font-size:14px">'+s.titulo+'</span>'
+      +'<span style="font-size:11px;background:'+col+';color:#fff;padding:2px 8px;border-radius:20px">'+s.estado+'</span>'
+      +'</div>'
+      +'<div style="font-size:13px;color:var(--texto2);margin-bottom:4px">🏥 '+s.inst+'</div>'
+      +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--texto2)">'
+      +(s.fechaSol?'<span>📅 Solicitud: '+fmt(s.fechaSol)+'</span>':'')
+      +(s.fechaEv?'<span>📆 Evento: '+fmt(s.fechaEv)+'</span>':'')
+      +(s.horario?'<span>🕐 '+s.horario+'</span>':'')
+      +(s.cant?'<span>👥 '+s.cant+' personas</span>':'')
+      +(s.lugar?'<span>📍 '+s.lugar+'</span>':'')
+      +'</div>'
+      +(s.notas?'<div style="margin-top:7px;font-size:12px;color:var(--texto2);background:var(--gris-claro);padding:6px 10px;border-radius:6px">'+s.notas+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+      +'<button class="btn btn-sm" onclick="abrirEditarSolicitud('+s.id+')">✏</button>'
+      +'<button class="btn btn-sm" style="color:#ef4444" onclick="eliminarSolicitud('+s.id+')">🗑</button>'
+      +'</div>'
+      +'</div>';
+    cont.appendChild(card);
+  });
+}
 function diagSupabase(){
   var msg=document.getElementById('diag-msg');
   if(msg)msg.textContent='Probando...';
@@ -4463,6 +4633,7 @@ function rerenderPaginaActiva(){
     } else if(id==='clases'){
       renderClasesBib();
     }
+  if(pag==='solicitudes'){renderSolicitudes();updBadgeSol();}
   }catch(e){
     console.error('Error en rerenderPaginaActiva:',e);
   }
@@ -4491,11 +4662,12 @@ async function cargarDesdeSupa(){
   setSyncStatus('sincronizando');
   try{
     // Cargar todo en paralelo
-    var [cursos,ediciones,docentes,alumnos,clases,materiales,agenda,usuarios]=await Promise.all([
+    var [cursos,ediciones,docentes,alumnos,solicitudesRaw,clases,materiales,agenda,usuarios]=await Promise.all([
       supaGet('cursos','order=id'),
       supaGet('ediciones','order=id'),
       supaGet('docentes','order=apellido'),
       supaGet('alumnos','order=id'),
+      supaGet('solicitudes','order=id'),
       supaGet('clases','order=id'),
       supaGet('materiales','order=id'),
       supaGet('agenda','order=fecha'),
@@ -4538,6 +4710,13 @@ async function cargarDesdeSupa(){
         curso_nombre:ev.curso_nombre||''};
     });
 
+    // Solicitudes
+    DB_SOL=(solicitudesRaw||[]).map(function(s){
+      return {id:s.id,inst:s.inst||'',titulo:s.titulo||'',
+        fechaSol:s.fecha_sol||'',fechaEv:s.fecha_ev||'',
+        horario:s.horario||'',cant:s.cant||0,lugar:s.lugar||'',
+        estado:s.estado||'Pendiente',notas:s.notas||''};
+    });
     DB.clasesBib=(materiales||[]).map(function(m){
       return {id:m.id,nombre:m.nombre,docente:m.docente||'—',anio:m.anio||'',
         tema:m.tema||'—',dur:m.dur||'—',modal:m.modal||'Presencial',
