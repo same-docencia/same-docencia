@@ -649,38 +649,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
           <button class="btn btn-dip btn-sm" id="btn-dip" onclick="prepDiplomas()" disabled>⬜ Emitir diplomas</button>
         </div>
         <!-- Diagnóstico oculto - activar con Ctrl+Shift+D -->
-        <!-- SOLICITUD DE CURSO -->
-<div class="mov" id="m-sol"><div class="modal modal-lg">
-  <h3 id="m-sol-ttl">Nueva solicitud de curso</h3>
-  <div class="fr fr2">
-    <div class="fg"><label class="flbl">Institución / Entidad solicitante *</label><input type="text" id="sol-inst" placeholder="Ej: Hospital Rivadavia"></div>
-    <div class="fg"><label class="flbl">Título del curso / capacitación *</label><input type="text" id="sol-titulo" placeholder="Ej: RCP Básico"></div>
-  </div>
-  <div class="fr fr2">
-    <div class="fg"><label class="flbl">Fecha de solicitud</label><input type="date" id="sol-fecha-sol"></div>
-    <div class="fg"><label class="flbl">Fecha propuesta del evento</label><input type="date" id="sol-fecha-ev"></div>
-  </div>
-  <div class="fr fr2">
-    <div class="fg"><label class="flbl">Horario propuesto</label><input type="text" id="sol-horario" placeholder="Ej: 9:00 a 13:00 hs"></div>
-    <div class="fg"><label class="flbl">Cantidad de personas</label><input type="number" id="sol-cant" min="1" placeholder="Ej: 30"></div>
-  </div>
-  <div class="fg"><label class="flbl">Lugar / Sede</label><input type="text" id="sol-lugar" placeholder="Ej: Sede del hospital, Av. Las Heras 2670"></div>
-  <div class="fg"><label class="flbl">Estado</label>
-    <select id="sol-estado" style="font-size:13px">
-      <option value="Pendiente">Pendiente</option>
-      <option value="En evaluación">En evaluación</option>
-      <option value="Aprobada">Aprobada</option>
-      <option value="Rechazada">Rechazada</option>
-    </select>
-  </div>
-  <div class="fg"><label class="flbl">Notas / Comentarios</label><textarea id="sol-notas" style="height:70px;font-size:13px;line-height:1.6" placeholder="Detalles adicionales, contacto, observaciones..."></textarea></div>
-  <div class="mfooter">
-    <button class="btn" onclick="closeM('m-sol')">Cancelar</button>
-    <button class="btn btn-pri" onclick="guardarSolicitud()">Guardar solicitud</button>
-  </div>
-</div></div>
-
-<div id="panel-diag" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:7px;font-size:12px;color:#7d5a00">
+        <div id="panel-diag" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:7px;font-size:12px;color:#7d5a00">
           <strong>Diagnóstico Supabase:</strong> <span id="diag-msg">—</span>
           <button class="btn btn-sm" onclick="diagSupabase()" style="margin-left:8px">Probar conexión</button>
         </div>
@@ -1034,6 +1003,37 @@ input:focus,select:focus,textarea:focus{border-color:var(--azul2);box-shadow:0 0
 </div>
 
 <!-- ===== MODALES ===== -->
+
+<!-- SOLICITUD DE CURSO -->
+<div class="mov" id="m-sol"><div class="modal modal-lg">
+  <h3 id="m-sol-ttl">Nueva solicitud de curso</h3>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Institución / Entidad solicitante *</label><input type="text" id="sol-inst" placeholder="Ej: Hospital Rivadavia"></div>
+    <div class="fg"><label class="flbl">Título del curso / capacitación *</label><input type="text" id="sol-titulo" placeholder="Ej: RCP Básico"></div>
+  </div>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Fecha de solicitud</label><input type="date" id="sol-fecha-sol"></div>
+    <div class="fg"><label class="flbl">Fecha propuesta del evento</label><input type="date" id="sol-fecha-ev"></div>
+  </div>
+  <div class="fr fr2">
+    <div class="fg"><label class="flbl">Horario propuesto</label><input type="text" id="sol-horario" placeholder="Ej: 9:00 a 13:00 hs"></div>
+    <div class="fg"><label class="flbl">Cantidad de personas</label><input type="number" id="sol-cant" min="1" placeholder="Ej: 30"></div>
+  </div>
+  <div class="fg"><label class="flbl">Lugar / Sede</label><input type="text" id="sol-lugar" placeholder="Ej: Sede del hospital, Av. Las Heras 2670"></div>
+  <div class="fg"><label class="flbl">Estado</label>
+    <select id="sol-estado" style="font-size:13px">
+      <option value="Pendiente">Pendiente</option>
+      <option value="En evaluación">En evaluación</option>
+      <option value="Aprobada">Aprobada</option>
+      <option value="Rechazada">Rechazada</option>
+    </select>
+  </div>
+  <div class="fg"><label class="flbl">Notas / Comentarios</label><textarea id="sol-notas" style="height:70px;font-size:13px;line-height:1.6" placeholder="Detalles adicionales, contacto, observaciones..."></textarea></div>
+  <div class="mfooter">
+    <button class="btn" onclick="closeM('m-sol')">Cancelar</button>
+    <button class="btn btn-pri" onclick="guardarSolicitud()">Guardar solicitud</button>
+  </div>
+</div></div>
 
 <!-- Nuevo/Editar Curso -->
 <div class="mov" id="m-nc"><div class="modal">
