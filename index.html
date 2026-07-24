@@ -1822,7 +1822,7 @@ function actualizarCantRefEd(val){
   ed.cantRef=n;
   var estado=document.getElementById('cant-ref-estado');
   if(estado)estado.textContent=n>0?'✓ Guardado: '+n+' participantes':'';
-  dbGuardarEdicion(c,ed);
+  dbGuardarEdicion(ed,c.id);
   buildChips();renderResumen();
 }
 function togAll(cb){document.querySelectorAll('.al-ck').forEach(function(c){c.checked=cb.checked});updSelCnt()}
