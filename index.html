@@ -4662,12 +4662,11 @@ async function cargarDesdeSupa(){
   setSyncStatus('sincronizando');
   try{
     // Cargar todo en paralelo
-    var [cursos,ediciones,docentes,alumnos,solicitudesRaw,clases,materiales,agenda,usuarios]=await Promise.all([
+    var [cursos,ediciones,docentes,alumnos,clases,materiales,agenda,usuarios]=await Promise.all([
       supaGet('cursos','order=id'),
       supaGet('ediciones','order=id'),
       supaGet('docentes','order=apellido'),
       supaGet('alumnos','order=id'),
-      supaGet('solicitudes','order=id'),
       supaGet('clases','order=id'),
       supaGet('materiales','order=id'),
       supaGet('agenda','order=fecha'),
@@ -4710,13 +4709,16 @@ async function cargarDesdeSupa(){
         curso_nombre:ev.curso_nombre||''};
     });
 
-    // Solicitudes
-    DB_SOL=(solicitudesRaw||[]).map(function(s){
-      return {id:s.id,inst:s.inst||'',titulo:s.titulo||'',
-        fechaSol:s.fecha_sol||'',fechaEv:s.fecha_ev||'',
-        horario:s.horario||'',cant:s.cant||0,lugar:s.lugar||'',
-        estado:s.estado||'Pendiente',notas:s.notas||''};
-    });
+    // Solicitudes (carga separada para no bloquear si falla)
+    try{
+      var solicitudesRaw=await supaGet('solicitudes','order=id');
+      DB_SOL=(solicitudesRaw||[]).map(function(s){
+        return {id:s.id,inst:s.inst||'',titulo:s.titulo||'',
+          fechaSol:s.fecha_sol||'',fechaEv:s.fecha_ev||'',
+          horario:s.horario||'',cant:s.cant||0,lugar:s.lugar||'',
+          estado:s.estado||'Pendiente',notas:s.notas||''};
+      });
+    }catch(e){DB_SOL=[];console.warn('Solicitudes no disponibles:',e);}
     DB.clasesBib=(materiales||[]).map(function(m){
       return {id:m.id,nombre:m.nombre,docente:m.docente||'—',anio:m.anio||'',
         tema:m.tema||'—',dur:m.dur||'—',modal:m.modal||'Presencial',
