@@ -2449,11 +2449,17 @@ function guardarAl(){
   if(DB.edicionActual!=null){
     var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(!ed)return;
     if(!ed.alumnos)ed.alumnos=[];al.id=nid(ed.alumnos);al._nuevo=true;ed.alumnos.push(al);
-    dbGuardarAlumno(al,c.id,ed.id).then(function(){recargarDatos();});
+    dbGuardarAlumno(al,c.id,ed.id).then(function(ok){
+      if(!ok)mostrarError('No se pudo guardar el alumno en Supabase.');
+      updateBdg();
+    });
     renderAlEd(ed);
   } else {
     al.id=nid(c.alumnos);al._nuevo=true;c.alumnos.push(al);
-    dbGuardarAlumno(al,c.id,null).then(function(){recargarDatos();});
+    dbGuardarAlumno(al,c.id,null).then(function(ok){
+      if(!ok)mostrarError('No se pudo guardar el alumno en Supabase.');
+      updateBdg();
+    });
     renderAlCurso(c);
   }
   // Limpiar
@@ -2632,7 +2638,7 @@ async function procImpCurso(){
   document.getElementById('btn-imp-curso').style.display='none';
   if(DB.edicionActual!=null){var edr=c.ediciones.find(function(x){return x.id===DB.edicionActual});if(edr)renderAlEd(edr);}
   else renderAlCurso(c);
-  recargarDatos();updateBdg();
+  updateBdg();
 }
 
 function abrirImpEdicion(cid,eid){
