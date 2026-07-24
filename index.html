@@ -4409,17 +4409,26 @@ function rerenderPaginaActiva(){
         if(c){
           renderClasesCurso(c);
           var tieneEd=c.ediciones&&c.ediciones.length>0;
-          document.getElementById('al-sin-ed').style.display=tieneEd?'none':'block';
-          document.getElementById('al-con-ed').style.display=tieneEd?'block':'none';
-          if(!tieneEd)renderAlCurso(c);
           if(DB.edicionActual!=null){
+            // Estamos viendo alumnos de una edición específica
             var ed=c.ediciones.find(function(x){return x.id===DB.edicionActual;});
             if(ed){
               document.getElementById('al-sin-ed').style.display='block';
               document.getElementById('al-con-ed').style.display='none';
               renderAlEd(ed);
               mostrarPanelCantRefEd(ed);
+            } else {
+              // La edición ya no existe, volver a vista de curso
+              DB.edicionActual=null;
+              document.getElementById('al-sin-ed').style.display=tieneEd?'none':'block';
+              document.getElementById('al-con-ed').style.display=tieneEd?'block':'none';
+              if(!tieneEd)renderAlCurso(c);
             }
+          } else {
+            // Vista general del curso sin edición activa
+            document.getElementById('al-sin-ed').style.display=tieneEd?'none':'block';
+            document.getElementById('al-con-ed').style.display=tieneEd?'block':'none';
+            if(!tieneEd)renderAlCurso(c);
           }
           renderEdDet(c);
         }
